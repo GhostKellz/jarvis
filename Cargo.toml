@@ -2,5 +2,50 @@
 name = "jarvis"
 version = "0.1.0"
 edition = "2024"
+authors = ["Your Name <your.email@example.com>"]
+description = "Your local AI assistant for Rust, Linux, and Homelab operations"
+license = "MIT"
+repository = "https://github.com/yourusername/jarvis"
+
+[[bin]]
+name = "jarvis"
+path = "src/main.rs"
+
+[workspace]
+members = [
+    "jarvis-core",
+    "jarvis-agent", 
+    "jarvis-shell",
+    "jarvis-nvim"
+]
 
 [dependencies]
+# CLI Framework
+clap = { version = "4.4", features = ["derive", "env"] }
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+config = "0.14"
+dirs = "5.0"
+
+# System Integration  
+sysinfo = "0.30"
+which = "4.4"
+shellexpand = "3.1"
+
+# LLM Integration
+reqwest = { version = "0.11", features = ["json", "stream"] }
+ollama-rs = "0.1"
+
+# Memory/Storage
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
+
+# Workspace crates
+jarvis-core = { path = "jarvis-core" }
+jarvis-agent = { path = "jarvis-agent" }
+jarvis-shell = { path = "jarvis-shell" }

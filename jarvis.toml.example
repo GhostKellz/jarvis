@@ -1,0 +1,45 @@
+# Jarvis Configuration File
+# This file is automatically created when you run 'jarvis config init'
+
+[llm]
+# Primary LLM provider: "ollama", "openai", "claude"
+primary_provider = "ollama"
+
+# Ollama configuration
+ollama_url = "http://localhost:11434"
+
+# API keys (optional, for cloud providers)
+# openai_api_key = "your-openai-key"
+# claude_api_key = "your-claude-key"
+
+# Default model to use
+default_model = "llama3.1:8b"
+
+# Context window size
+context_window = 8192
+
+# Temperature for generation (0.0 to 1.0)
+temperature = 0.7
+
+[system]
+# Arch package manager: "pacman", "yay", "paru"
+arch_package_manager = "pacman"
+
+# Path to your dotfiles (optional)
+# dotfiles_path = "/home/user/.dotfiles"
+
+# Path to homelab configuration (optional)
+# homelab_config = "/home/user/.config/homelab.toml"
+
+# GPU settings
+gpu_enabled = false
+gpu_devices = []
+
+# Memory database location
+database_path = "~/.local/share/jarvis/memory.db"
+
+# Plugin search paths
+plugin_paths = [
+    "~/.config/jarvis/plugins",
+    "/usr/local/share/jarvis/plugins"
+]
