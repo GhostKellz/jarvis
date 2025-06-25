@@ -17,7 +17,7 @@ pub struct LLMConfig {
     pub ollama_url: String,
     pub openai_api_key: Option<String>,
     pub claude_api_key: Option<String>,
-    pub default_model: String,
+    pub default_model: Option<String>,
     pub context_window: usize,
     pub temperature: f32,
 }
@@ -39,7 +39,7 @@ impl Default for Config {
                 ollama_url: "http://localhost:11434".to_string(),
                 openai_api_key: None,
                 claude_api_key: None,
-                default_model: "llama3.1:8b".to_string(),
+                default_model: Some("llama3.1:8b".to_string()),
                 context_window: 8192,
                 temperature: 0.7,
             },

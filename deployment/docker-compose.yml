@@ -1,0 +1,296 @@
+version: '3.8'
+
+services:
+  # Core Jarvis Agent
+  jarvis-core:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: jarvis-core
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=core-001
+      - JARVIS_ROLE=coordinator
+      - JARVIS_NETWORK_PORT=7777
+      - JARVIS_API_PORT=8080
+      - JARVIS_LOG_LEVEL=info
+      - GHOSTCHAIN_RPC_URL=http://ghostchain:8545
+      - ZIG_BLOCKCHAIN_RPC_URL=http://zig-node:8646
+    ports:
+      - "8080:8080"   # API endpoint
+      - "7777:7777"   # P2P/QUIC communication
+    volumes:
+      - jarvis_data:/data/jarvis
+      - /var/run/docker.sock:/var/run/docker.sock  # For container orchestration
+    networks:
+      - jarvis_mesh
+      - blockchain_net
+    depends_on:
+      - ghostchain
+      - zig-node
+
+  # Network Monitor Agent
+  jarvis-network-monitor:
+    build:
+      context: ..
+      dockerfile: Dockerfile.network-monitor
+    container_name: jarvis-network-monitor
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=network-monitor-001
+      - JARVIS_ROLE=network_monitor
+      - JARVIS_COORDINATOR_URL=http://jarvis-core:8080
+      - JARVIS_CAPABILITIES=NetworkMonitor,DataCollector
+      - MONITORING_INTERVAL=30s
+      - BANDWIDTH_THRESHOLD=80
+    ports:
+      - "7778:7777"
+    volumes:
+      - network_data:/data/monitoring
+    networks:
+      - jarvis_mesh
+      - monitoring_net
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  # Blockchain Security Auditor Agent
+  jarvis-blockchain-auditor:
+    build:
+      context: ..
+      dockerfile: Dockerfile.blockchain-auditor
+    container_name: jarvis-blockchain-auditor
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=auditor-001
+      - JARVIS_ROLE=blockchain_auditor
+      - JARVIS_COORDINATOR_URL=http://jarvis-core:8080
+      - JARVIS_CAPABILITIES=BlockchainAuditor,SecurityScanner
+      - AUDIT_INTERVAL=300s
+      - SECURITY_ALERT_WEBHOOK=http://alertmanager:9093/api/v1/alerts
+    ports:
+      - "7779:7777"
+    volumes:
+      - auditor_data:/data/audits
+      - ./audit-rules:/config/audit-rules:ro
+    networks:
+      - jarvis_mesh
+      - blockchain_net
+    depends_on:
+      - ghostchain
+      - zig-node
+
+  # Gas Fee Optimizer Agent
+  jarvis-gas-optimizer:
+    build:
+      context: ..
+      dockerfile: Dockerfile.gas-optimizer
+    container_name: jarvis-gas-optimizer
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=gas-optimizer-001
+      - JARVIS_ROLE=gas_optimizer
+      - JARVIS_COORDINATOR_URL=http://jarvis-core:8080
+      - JARVIS_CAPABILITIES=GasFeeOptimizer,DataCollector
+      - OPTIMIZATION_STRATEGY=ml_based
+      - GAS_PRICE_SOURCES=ghostchain,ethereum,polygon
+    ports:
+      - "7780:7777"
+    volumes:
+      - gas_data:/data/gas-analytics
+    networks:
+      - jarvis_mesh
+      - blockchain_net
+    depends_on:
+      - ghostchain
+      - redis
+
+  # Smart Contract Maintenance Agent
+  jarvis-contract-maintainer:
+    build:
+      context: ..
+      dockerfile: Dockerfile.contract-maintainer
+    container_name: jarvis-contract-maintainer
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=contract-maintainer-001
+      - JARVIS_ROLE=contract_maintainer
+      - JARVIS_COORDINATOR_URL=http://jarvis-core:8080
+      - JARVIS_CAPABILITIES=ContractMaintainer,SecurityScanner,GasOptimizer
+      - MAINTENANCE_SCHEDULE=0 2 * * *  # Daily at 2 AM
+      - AUTO_UPGRADE_ENABLED=false
+      - GOVERNANCE_VOTING_ENABLED=true
+    ports:
+      - "7781:7777"
+    volumes:
+      - contract_data:/data/contracts
+      - ./contract-templates:/config/templates:ro
+      - wallet_keys:/secure/keys:ro
+    networks:
+      - jarvis_mesh
+      - blockchain_net
+    depends_on:
+      - ghostchain
+      - zig-node
+
+  # Infrastructure Controller Agent (LXC/Proxmox Integration)
+  jarvis-infra-controller:
+    build:
+      context: ..
+      dockerfile: Dockerfile.infra-controller
+    container_name: jarvis-infra-controller
+    restart: unless-stopped
+    environment:
+      - JARVIS_AGENT_ID=infra-controller-001
+      - JARVIS_ROLE=infra_controller
+      - JARVIS_COORDINATOR_URL=http://jarvis-core:8080
+      - JARVIS_CAPABILITIES=InfraController,ContainerOrchestrator
+      - PROXMOX_API_URL=${PROXMOX_API_URL}
+      - PROXMOX_TOKEN=${PROXMOX_TOKEN}
+      - LXC_TEMPLATE_PATH=/config/lxc-templates
+    ports:
+      - "7782:7777"
+    volumes:
+      - infra_data:/data/infrastructure
+      - ./lxc-templates:/config/lxc-templates:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - jarvis_mesh
+      - management_net
+    privileged: true  # Required for container management
+
+  # GhostChain Node
+  ghostchain:
+    image: ghostchain/node:latest
+    container_name: ghostchain-node
+    restart: unless-stopped
+    environment:
+      - GHOSTCHAIN_NETWORK=testnet
+      - GHOSTCHAIN_RPC_PORT=8545
+      - GHOSTCHAIN_P2P_PORT=30303
+      - GHOSTCHAIN_METRICS_PORT=6060
+    ports:
+      - "8545:8545"   # RPC
+      - "30303:30303" # P2P
+      - "6060:6060"   # Metrics
+    volumes:
+      - ghostchain_data:/data/ghostchain
+    networks:
+      - blockchain_net
+
+  # Zig Blockchain Node
+  zig-node:
+    image: zigblockchain/node:latest
+    container_name: zig-blockchain-node
+    restart: unless-stopped
+    environment:
+      - ZIG_NETWORK=testnet
+      - ZIG_RPC_PORT=8646
+      - ZIG_P2P_PORT=30304
+    ports:
+      - "8646:8646"   # RPC
+      - "30304:30304" # P2P
+    volumes:
+      - zig_data:/data/zig
+    networks:
+      - blockchain_net
+
+  # Redis for inter-agent state sharing
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - jarvis_mesh
+    command: redis-server --appendonly yes
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jarvis-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring_net
+      - jarvis_mesh
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+
+  # Grafana for monitoring dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jarvis-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=jarvis123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - monitoring_net
+    depends_on:
+      - prometheus
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jarvis-jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Web UI
+      - "14268:14268"  # HTTP collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - monitoring_net
+      - jarvis_mesh
+
+volumes:
+  jarvis_data:
+  network_data:
+  auditor_data:
+  gas_data:
+  contract_data:
+  infra_data:
+  ghostchain_data:
+  zig_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  wallet_keys:
+
+networks:
+  jarvis_mesh:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  blockchain_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+  monitoring_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+  management_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
