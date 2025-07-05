@@ -2,10 +2,10 @@
 name = "jarvis"
 version = "0.1.0"
 edition = "2024"
-authors = ["Your Name <your.email@example.com>"]
+authors = ["Christopher Kelley <ckelley@ghostkellz.sh>"]
 description = "Your local AI assistant for Rust, Linux, and Homelab operations"
 license = "MIT"
-repository = "https://github.com/yourusername/jarvis"
+repository = "https://github.com/ghostkellz/jarvis"
 
 [[bin]]
 name = "jarvis"
