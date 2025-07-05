@@ -1,20 +1,10 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Conversation {
-    pub id: Uuid,
-    pub title: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub messages: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
-    pub id: Uuid,
-    pub conversation_id: Uuid,
+    pub id: String,
+    pub conversation_id: String,
     pub role: MessageRole,
     pub content: String,
     pub metadata: MessageMetadata,
@@ -22,6 +12,23 @@ pub struct Message {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageMetadata {
+    pub tokens: Option<u32>,
+    pub model: Option<String>,
+    pub cost: Option<f64>,
+}
+
+impl Default for MessageMetadata {
+    fn default() -> Self {
+        Self {
+            tokens: None,
+            model: None,
+            cost: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MessageRole {
     User,
     Assistant,
@@ -29,49 +36,35 @@ pub enum MessageRole {
     Tool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageMetadata {
-    pub model_used: Option<String>,
-    pub tokens_used: Option<u32>,
-    pub execution_time_ms: Option<u64>,
-    pub system_context: Option<SystemContext>,
+impl std::fmt::Display for MessageRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MessageRole::User => write!(f, "User"),
+            MessageRole::Assistant => write!(f, "Assistant"),
+            MessageRole::System => write!(f, "System"),
+            MessageRole::Tool => write!(f, "Tool"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemContext {
-    pub working_directory: String,
-    pub git_repo: Option<GitContext>,
-    pub system_info: SystemInfo,
-    pub environment_vars: Vec<(String, String)>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GitContext {
-    pub repo_path: String,
-    pub current_branch: String,
-    pub dirty: bool,
-    pub last_commit: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemInfo {
-    pub os: String,
-    pub kernel: String,
-    pub hostname: String,
-    pub arch: String,
-    pub uptime: u64,
-    pub load_avg: (f64, f64, f64),
+pub struct Conversation {
+    pub id: String,
+    pub title: String,
+    pub messages: Vec<Message>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentTask {
-    pub id: Uuid,
+    pub id: String,
     pub task_type: TaskType,
     pub description: String,
     pub status: TaskStatus,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-    pub result: Option<TaskResult>,
+    pub result: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,22 +74,82 @@ pub enum TaskType {
     Write,
     Check,
     Fix,
-    Train,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskStatus {
-    Pending,
+    Created,
     Running,
     Completed,
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskResult {
-    pub success: bool,
-    pub output: String,
-    pub files_created: Vec<String>,
-    pub commands_executed: Vec<String>,
-    pub error_message: Option<String>,
+// Simple Environment stub
+#[derive(Debug, Clone)]
+pub struct Environment {
+    pub os_type: String,
+    pub hostname: String,
+    pub working_directory: String,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self {
+            os_type: "linux".to_string(),
+            hostname: "localhost".to_string(), 
+            working_directory: "/tmp".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GitContext {
+    pub repo_path: String,
+    pub current_branch: String,
+    pub dirty: bool,
+    pub last_commit: String,
+}
+
+impl Default for GitContext {
+    fn default() -> Self {
+        Self {
+            repo_path: String::new(),
+            current_branch: String::new(),
+            dirty: false,
+            last_commit: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SystemInfo {
+    pub os: String,
+    pub kernel: String,
+    pub hostname: String,
+    pub arch: String,
+    pub uptime: u64,
+    pub load_avg: (f64, f64, f64),
+}
+
+impl Default for SystemInfo {
+    fn default() -> Self {
+        Self {
+            os: "linux".to_string(),
+            kernel: "unknown".to_string(),
+            hostname: "localhost".to_string(),
+            arch: "x86_64".to_string(),
+            uptime: 0,
+            load_avg: (0.0, 0.0, 0.0),
+        }
+    }
+}
+
+// Blockchain stubs
+#[derive(Debug, Clone)]
+pub struct BlockchainManager;
+
+impl BlockchainManager {
+    pub fn new() -> Self {
+        Self
+    }
 }

@@ -1,9 +1,9 @@
 use anyhow::Result;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use crate::types::{Message, MessageRole, Conversation};
+use crate::types::{Message, MessageRole, Conversation, Environment};
 use crate::memory::MemoryStore;
-use jarvis_shell::Environment;
+// use jarvis_shell::Environment; // Removed to avoid circular dependency
 
 /// Intelligent context manager for conversation flow
 pub struct ContextManager {
@@ -272,8 +272,8 @@ impl ContextManager {
         let stop_words = ["the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were", "be", "been", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "a", "an", "this", "that", "these", "those", "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them"];
         
         for message in messages {
-            let words: Vec<&str> = message.content
-                .to_lowercase()
+            let content_lower = message.content.to_lowercase();
+            let words: Vec<&str> = content_lower
                 .split_whitespace()
                 .filter(|word| word.len() > 3 && !stop_words.contains(word))
                 .collect();

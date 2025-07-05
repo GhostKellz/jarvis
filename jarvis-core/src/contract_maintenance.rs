@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-use crate::blockchain::{BlockchainNetwork, SecurityReport, RiskLevel, Vulnerability};
+// use crate::blockchain::{BlockchainNetwork, SecurityReport, RiskLevel, Vulnerability}; // Commented out
 use crate::skills::{Skill, SkillMetadata, SkillContext, SkillResult, SkillCategory, Permission};
 
 /// AI-powered smart contract maintenance system
@@ -589,8 +589,8 @@ impl ContractMaintainer {
             contract_address: contract_address.to_string(),
             timestamp: Utc::now(),
             overall_health_score: Self::calculate_health_score(&issues),
-            issues,
-            recommendations,
+            issues: issues.clone(),
+            recommendations: recommendations.clone(),
             estimated_gas_savings: self.estimate_gas_savings(&recommendations),
             priority: Self::determine_priority(&issues),
         })
@@ -890,6 +890,34 @@ pub struct ExecutionResult {
     pub total_actions: usize,
     pub execution_log: Vec<String>,
     pub gas_saved: u64,
+}
+
+// Temporary stub types to fix compilation until blockchain module is restored
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SecurityReport {
+    pub contract_address: String,
+    pub risk_level: RiskLevel,
+    pub vulnerabilities: Vec<Vulnerability>,
+    pub overall_score: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum RiskLevel {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Vulnerability {
+    pub vuln_type: String,
+    pub severity: String,
+    pub description: String,
+}
+
+pub trait BlockchainNetwork: Send + Sync {
+    // Stub trait
 }
 
 // Implementation stubs for AI analyzer and security monitor

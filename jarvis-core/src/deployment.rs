@@ -8,7 +8,6 @@ use chrono::{DateTime, Utc};
 
 /// Agent deployment and orchestration system
 /// Supports Docker Compose, LXC/Proxmox, and Kubernetes
-#[derive(Clone)]
 pub struct DeploymentManager {
     pub orchestrators: HashMap<String, Box<dyn Orchestrator>>,
     pub active_deployments: HashMap<Uuid, AgentDeployment>,

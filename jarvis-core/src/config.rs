@@ -7,6 +7,7 @@ use dirs;
 pub struct Config {
     pub llm: LLMConfig,
     pub system: SystemConfig,
+    pub blockchain: Option<BlockchainConfig>,
     pub database_path: String,
     pub plugin_paths: Vec<String>,
 }
@@ -31,6 +32,31 @@ pub struct SystemConfig {
     pub gpu_devices: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockchainConfig {
+    pub ghostchain: Option<GhostChainConfig>,
+    pub ethereum: Option<EthereumConfig>,
+    pub default_network: String,
+    pub gas_optimization: bool,
+    pub security_monitoring: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GhostChainConfig {
+    pub rpc_url: String,
+    pub chain_id: u64,
+    pub walletd_url: Option<String>,
+    pub ghostbridge_url: Option<String>,
+    pub zvm_url: Option<String>,
+    pub zns_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EthereumConfig {
+    pub rpc_url: String,
+    pub chain_id: u64,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -50,6 +76,20 @@ impl Default for Config {
                 gpu_enabled: false,
                 gpu_devices: vec![],
             },
+            blockchain: Some(BlockchainConfig {
+                ghostchain: Some(GhostChainConfig {
+                    rpc_url: "http://localhost:8545".to_string(),
+                    chain_id: 31337,
+                    walletd_url: Some("http://localhost:8080".to_string()),
+                    ghostbridge_url: Some("http://localhost:8081".to_string()),
+                    zvm_url: Some("http://localhost:8082".to_string()),
+                    zns_url: Some("http://localhost:8083".to_string()),
+                }),
+                ethereum: None,
+                default_network: "ghostchain".to_string(),
+                gas_optimization: true,
+                security_monitoring: true,
+            }),
             database_path: "~/.local/share/jarvis/memory.db".to_string(),
             plugin_paths: vec![
                 "~/.config/jarvis/plugins".to_string(),

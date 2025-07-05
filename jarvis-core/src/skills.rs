@@ -6,7 +6,8 @@ use std::path::PathBuf;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use crate::error::{JarvisError, JarvisResult};
-use jarvis_shell::Environment;
+use crate::types::Environment;
+// use jarvis_shell::Environment; // Removed to avoid circular dependency
 
 /// Agent skill system with plugin architecture
 pub struct SkillManager {

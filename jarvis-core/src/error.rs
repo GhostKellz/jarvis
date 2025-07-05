@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// Custom error types for Jarvis
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum JarvisError {
     /// Configuration related errors
     Config(String),

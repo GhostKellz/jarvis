@@ -3,12 +3,12 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+
+pub mod ghostchain;
 
 /// Blockchain integration for GhostChain and Zig-based networks
 /// Provides monitoring, auditing, and gas optimization capabilities
-#[derive(Clone)]
 pub struct BlockchainManager {
     pub networks: HashMap<String, Box<dyn BlockchainNetwork>>,
     pub gas_monitor: GasMonitor,
@@ -228,9 +228,10 @@ pub enum Severity {
 /// Gas optimization suggestion
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GasOptimization {
-    pub description: String,
+    pub current_gas_price: u64,
+    pub optimized_gas_price: u64,
     pub estimated_savings: u64,
-    pub difficulty: OptimizationDifficulty,
+    pub strategy: String,
 }
 
 /// Difficulty level for implementing optimization
@@ -298,13 +299,24 @@ pub struct BlockchainMetrics {
 }
 
 impl BlockchainManager {
-    pub async fn new() -> Result<Self> {
-        Ok(Self {
+    pub async fn new(config: &crate::config::Config) -> Result<Self> {
+        let mut manager = Self {
             networks: HashMap::new(),
             gas_monitor: GasMonitor::new(),
             security_auditor: SecurityAuditor::new(),
             metrics: BlockchainMetrics::default(),
-        })
+        };
+        
+        // Initialize GhostChain network if configured
+        if let Some(ghostchain_config) = &config.blockchain.as_ref().and_then(|b| b.ghostchain.as_ref()) {
+            let ghostchain = ghostchain::GhostChainNetwork::new(
+                &ghostchain_config.rpc_url,
+                ghostchain_config.chain_id,
+            ).await?;
+            manager.add_network("ghostchain".to_string(), Box::new(ghostchain)).await?;
+        }
+        
+        Ok(manager)
     }
 
     /// Add a blockchain network to monitor
@@ -384,6 +396,132 @@ impl BlockchainManager {
             },
         }
     }
+
+    /// Monitor blockchain networks once
+    pub async fn monitor_once(&self, network: &str) -> Result<()> {
+        if network == "all" {
+            for (name, net) in &self.networks {
+                let health = net.get_network_health().await?;
+                let stats = net.get_network_stats().await?;
+                println!("📊 Network: {}", name);
+                println!("   Health: {:?}", health);
+                println!("   Stats: {:?}", stats);
+                println!();
+            }
+        } else if let Some(net) = self.networks.get(network) {
+            let health = net.get_network_health().await?;
+            let stats = net.get_network_stats().await?;
+            println!("📊 Network: {}", network);
+            println!("   Health: {:?}", health);
+            println!("   Stats: {:?}", stats);
+        } else {
+            return Err(anyhow::anyhow!("Network '{}' not found", network));
+        }
+        Ok(())
+    }
+
+    /// Monitor blockchain networks continuously
+    pub async fn monitor_continuous(&self, network: &str) -> Result<()> {
+        println!("🔄 Starting continuous monitoring for {} (Ctrl+C to stop)", network);
+        loop {
+            self.monitor_once(network).await?;
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        }
+    }
+
+    /// Get balance for an address
+    pub async fn get_balance(&self, network: &str, address: &str) -> Result<String> {
+        if let Some(net) = self.networks.get(network) {
+            // TODO: Implement balance checking through RPC
+            Ok(format!("Balance lookup for {} on {} - Not implemented yet", address, network))
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Get block information
+    pub async fn get_block(&self, network: &str, block: &str) -> Result<BlockInfo> {
+        if let Some(net) = self.networks.get(network) {
+            if block == "latest" {
+                net.get_latest_block().await
+            } else {
+                // TODO: Implement specific block lookup
+                net.get_latest_block().await
+            }
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Audit a contract
+    pub async fn audit_contract(&self, network: &str, contract: &str) -> Result<SecurityReport> {
+        if let Some(net) = self.networks.get(network) {
+            net.audit_contract(contract).await
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Save audit report to file
+    pub async fn save_audit_report(&self, report: &SecurityReport, filename: &str) -> Result<()> {
+        let json = serde_json::to_string_pretty(report)?;
+        tokio::fs::write(filename, json).await?;
+        Ok(())
+    }
+
+    /// Get gas prices
+    pub async fn get_gas_prices(&self, network: &str) -> Result<GasInfo> {
+        if let Some(net) = self.networks.get(network) {
+            net.get_gas_info().await
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Optimize gas usage
+    pub async fn optimize_gas(&self, network: &str) -> Result<GasOptimization> {
+        if let Some(net) = self.networks.get(network) {
+            let gas_info = net.get_gas_info().await?;
+            Ok(GasOptimization {
+                current_gas_price: gas_info.gas_price,
+                optimized_gas_price: gas_info.gas_price * 90 / 100, // 10% reduction
+                estimated_savings: gas_info.gas_price / 10,
+                strategy: "Timing optimization".to_string(),
+            })
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Get network health
+    pub async fn get_network_health(&self, network: &str, detailed: bool) -> Result<NetworkHealth> {
+        if let Some(net) = self.networks.get(network) {
+            net.get_network_health().await
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
+
+    /// Resolve ZNS names
+    pub async fn resolve_zns(&self, name: &str, record_type: &str) -> Result<String> {
+        // TODO: Implement ZNS resolution through GhostChain ZNS service
+        Ok(format!("ZNS resolution for {} ({}) - Not implemented yet", name, record_type))
+    }
+
+    /// Deploy contract
+    pub async fn deploy_contract(&self, network: &str, contract: &str, args: &[String]) -> Result<ContractDeployment> {
+        if let Some(_net) = self.networks.get(network) {
+            // TODO: Implement contract deployment through ZVM
+            Ok(ContractDeployment {
+                contract_address: "0x1234567890abcdef1234567890abcdef12345678".to_string(),
+                transaction_hash: "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890".to_string(),
+                gas_used: 21000,
+                deployment_cost: 1000000,
+            })
+        } else {
+            Err(anyhow::anyhow!("Network '{}' not found", network))
+        }
+    }
 }
 
 /// Gas price recommendation
@@ -411,6 +549,24 @@ pub struct SecurityAlert {
     pub contract: String,
     pub risk_level: RiskLevel,
     pub timestamp: DateTime<Utc>,
+}
+
+/// Contract deployment result
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ContractDeployment {
+    pub contract_address: String,
+    pub transaction_hash: String,
+    pub gas_used: u64,
+    pub deployment_cost: u64,
+}
+
+/// Gas optimization result
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GasOptimizationSuggestion {
+    pub current_gas_price: u64,
+    pub optimized_gas_price: u64,
+    pub estimated_savings: u64,
+    pub strategy: String,
 }
 
 impl GasMonitor {

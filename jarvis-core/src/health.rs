@@ -3,7 +3,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tokio::process::Command;
-use jarvis_shell::Environment;
+use crate::types::Environment;
+// use jarvis_shell::Environment; // Removed to avoid circular dependency
 
 /// System health monitoring and auto-diagnostics
 pub struct HealthMonitor {

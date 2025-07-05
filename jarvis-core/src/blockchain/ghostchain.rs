@@ -404,162 +404,44 @@ impl BlockchainNetwork for GhostChainNetwork {
 }
 
 impl GhostChainNetwork {
-    pub async fn new(
-        ghostd_url: String,
+    /// Create a new GhostChain network connection
+    pub async fn new(rpc_url: &str, chain_id: u64) -> Result<Self> {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()?;
+        
+        Ok(Self {
+            rpc_client: client,
+            ghostd_url: rpc_url.to_string(),
+            walletd_url: None,
+            ghostbridge_url: None,
+            zvm_url: None,
+            zns_url: None,
+            chain_id,
+        })
+    }
+    
+    /// Create a new GhostChain network with all service URLs
+    pub async fn new_with_services(
+        rpc_url: &str,
         chain_id: u64,
         walletd_url: Option<String>,
         ghostbridge_url: Option<String>,
         zvm_url: Option<String>,
         zns_url: Option<String>,
     ) -> Result<Self> {
-        let rpc_client = Client::builder()
+        let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .build()?;
-            
-        // Test connection to ghostd
-        let health_check = rpc_client
-            .post(&ghostd_url)
-            .json(&json!({
-                "jsonrpc": "2.0",
-                "method": "net_version",
-                "params": [],
-                "id": 1
-            }))
-            .send()
-            .await;
-            
-        if health_check.is_err() {
-            tracing::warn!("Could not connect to ghostd at {}, but continuing anyway", ghostd_url);
-        }
         
         Ok(Self {
-            rpc_client,
-            ghostd_url,
+            rpc_client: client,
+            ghostd_url: rpc_url.to_string(),
             walletd_url,
             ghostbridge_url,
             zvm_url,
             zns_url,
             chain_id,
         })
-    }
-    
-    async fn submit_transaction_via_walletd(&self, tx: Transaction) -> Result<String> {
-        let walletd_url = self.walletd_url.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("walletd not configured"))?;
-            
-        let response = self.rpc_client
-            .post(&format!("{}/sign_and_submit", walletd_url))
-            .json(&json!({
-                "transaction": {
-                    "to": tx.to,
-                    "value": tx.value,
-                    "gas": tx.gas_limit,
-                    "gasPrice": tx.gas_price,
-                    "data": tx.data
-                },
-                "from": tx.from
-            }))
-            .send()
-            .await?;
-            
-        let result: Value = response.json().await?;
-        
-        if let Some(error) = result.get("error") {
-            return Err(anyhow::anyhow!("walletd signing error: {}", error));
-        }
-        
-        Ok(result["transaction_hash"].as_str().unwrap_or("").to_string())
-    }
-    
-    async fn check_walletd_health(&self, walletd_url: &str) -> Result<()> {
-        let response = self.rpc_client
-            .get(&format!("{}/health", walletd_url))
-            .send()
-            .await?;
-            
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("walletd health check failed"))
-        }
-    }
-    
-    async fn audit_contract_via_zvm(&self, contract_address: &str) -> Result<SecurityReport> {
-        let zvm_url = self.zvm_url.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ZVM not configured"))?;
-            
-        let response = self.rpc_client
-            .post(&format!("{}/analyze", zvm_url))
-            .json(&json!({
-                "contract_address": contract_address,
-                "analysis_type": "security"
-            }))
-            .send()
-            .await?;
-            
-        let analysis: Value = response.json().await?;
-        
-        if let Some(error) = analysis.get("error") {
-            return Err(anyhow::anyhow!("ZVM analysis error: {}", error));
-        }
-        
-        // Parse ZVM analysis results
-        // TODO: Implement proper parsing based on ZVM response format
-        
-        Ok(SecurityReport {
-            contract_address: contract_address.to_string(),
-            scan_date: Utc::now(),
-            risk_level: RiskLevel::Low,
-            vulnerabilities: vec![],
-            gas_optimizations: vec![],
-            compliance_score: 95.0,
-        })
-    }
-    
-    /// Resolve .ghost domains using ZNS
-    pub async fn resolve_ghost_name(&self, name: &str) -> Result<String> {
-        let zns_url = self.zns_url.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("ZNS not configured"))?;
-            
-        let response = self.rpc_client
-            .get(&format!("{}/resolve/{}", zns_url, name))
-            .send()
-            .await?;
-            
-        let resolution: Value = response.json().await?;
-        
-        if let Some(error) = resolution.get("error") {
-            return Err(anyhow::anyhow!("ZNS resolution error: {}", error));
-        }
-        
-        Ok(resolution["address"].as_str().unwrap_or("").to_string())
-    }
-    
-    /// Get account balance (supports .ghost names)
-    pub async fn get_balance(&self, address_or_name: &str) -> Result<String> {
-        let address = if address_or_name.ends_with(".ghost") {
-            self.resolve_ghost_name(address_or_name).await?
-        } else {
-            address_or_name.to_string()
-        };
-        
-        let response = self.rpc_client
-            .post(&self.ghostd_url)
-            .json(&json!({
-                "jsonrpc": "2.0",
-                "method": "eth_getBalance",
-                "params": [address, "latest"],
-                "id": 1
-            }))
-            .send()
-            .await?;
-            
-        let balance_data: Value = response.json().await?;
-        
-        if let Some(error) = balance_data.get("error") {
-            return Err(anyhow::anyhow!("Balance lookup error: {}", error));
-        }
-        
-        Ok(balance_data["result"].as_str().unwrap_or("0x0").to_string())
     }
 }

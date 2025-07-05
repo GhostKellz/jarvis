@@ -88,7 +88,7 @@ impl MemoryStore {
         .await?;
         
         Ok(Conversation {
-            id,
+            id: id.to_string(),  // Convert to String
             title: title.to_string(),
             created_at: now,
             updated_at: now,
@@ -126,8 +126,8 @@ impl MemoryStore {
         .await?;
         
         Ok(Message {
-            id,
-            conversation_id,
+            id: id.to_string(),  // Convert to String
+            conversation_id: conversation_id.to_string(),  // Convert to String
             role,
             content: content.to_string(),
             metadata,
@@ -147,7 +147,7 @@ impl MemoryStore {
             let messages = self.get_conversation_messages(conversation_id).await?;
             
             Ok(Some(Conversation {
-                id: Uuid::parse_str(&row.0)?,
+                id: row.0,  // Use String directly
                 title: row.1,
                 created_at: chrono::DateTime::parse_from_rfc3339(&row.2)?.with_timezone(&chrono::Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&row.3)?.with_timezone(&chrono::Utc),
@@ -178,8 +178,8 @@ impl MemoryStore {
             let metadata: MessageMetadata = serde_json::from_str(&row.3)?;
             
             messages.push(Message {
-                id: Uuid::parse_str(&row.0)?,
-                conversation_id,
+                id: row.0,  // Use String directly
+                conversation_id: conversation_id.to_string(),  // Convert to String
                 role,
                 content: row.2,
                 metadata,
@@ -223,7 +223,7 @@ impl MemoryStore {
         for row in rows {
             // This is a simplified version - you'd want proper enum parsing
             tasks.push(AgentTask {
-                id: Uuid::parse_str(&row.0)?,
+                id: row.0,  // Use String directly
                 task_type: crate::types::TaskType::Explain, // TODO: Parse properly
                 description: row.2,
                 status: crate::types::TaskStatus::Completed, // TODO: Parse properly
