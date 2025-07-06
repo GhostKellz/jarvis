@@ -1,0 +1,84 @@
+# Example configuration for JARVIS-NV
+# Copy this to config.toml and customize as needed
+
+[gpu]
+enabled = true
+device_id = 0
+benchmark_on_startup = false
+memory_limit_gb = 6.0
+inference_batch_size = 4
+model_cache_size = 3
+
+[node]
+ghostchain_enabled = true
+zvm_enabled = true
+ghostchain_url = "http://localhost:8545"
+ghostchain_ws_url = "ws://localhost:8546"
+zvm_url = "http://localhost:8547"
+monitoring_interval_ms = 5000
+health_check_interval_ms = 30000
+
+[web5]
+enabled = true
+bind_address = "[::]:3000"
+quic_enabled = true
+http3_enabled = true
+ipv6_preferred = true
+max_connections = 1000
+connection_timeout_ms = 30000
+keep_alive_interval_ms = 10000
+
+[metrics]
+enabled = true
+prometheus_enabled = true
+bind_address = "127.0.0.1:9090"
+collection_interval_ms = 5000
+retention_days = 7
+export_interval_ms = 10000
+
+[bridge]
+enabled = true
+grpc_bind_address = "[::]:50051"
+quic_bind_address = "[::]:4433"
+grpc_endpoint = "http://localhost:50051"
+max_connections = 100
+timeout_ms = 5000
+retry_attempts = 3
+
+[agent]
+enabled = true
+anomaly_detection = true
+performance_optimization = true
+predictive_analytics = true
+learning_enabled = true
+inference_interval_ms = 10000
+optimization_interval_ms = 60000
+learning_interval_ms = 300000
+data_retention_hours = 168
+
+[security]
+tls_enabled = true
+cert_path = "certs/cert.pem"
+key_path = "certs/key.pem"
+require_client_cert = false
+allowed_origins = ["*"]
+
+[logging]
+level = "info"
+format = "json"
+file_enabled = true
+file_path = "logs/jarvis-nv.log"
+max_file_size_mb = 100
+max_files = 10
+
+[models]
+default_model = "llama-7b-chat"
+model_path = "/app/models"
+auto_download = false
+cache_enabled = true
+
+[performance]
+worker_threads = 4
+max_blocking_threads = 16
+stack_size_kb = 2048
+enable_io_uring = false

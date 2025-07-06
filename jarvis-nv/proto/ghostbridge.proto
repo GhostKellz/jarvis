@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package ghostbridge;
+
+// Block request message
+message BlockRequest {
+    uint64 block_number = 1;
+    bool include_transactions = 2;
+}
+
+// Block response message
+message BlockResponse {
+    string block_hash = 1;
+    uint64 block_number = 2;
+    uint64 timestamp = 3;
+    uint32 transaction_count = 4;
+    uint64 gas_used = 5;
+    uint64 gas_limit = 6;
+    string miner = 7;
+    string difficulty = 8;
+    string total_difficulty = 9;
+    uint64 size = 10;
+    string parent_hash = 11;
+    string state_root = 12;
+    string transactions_root = 13;
+}
+
+// Transaction request message
+message TransactionRequest {
+    string tx_hash = 1;
+}
+
+// Transaction response message
+message TransactionResponse {
+    string tx_hash = 1;
+    string block_hash = 2;
+    uint64 block_number = 3;
+    uint32 transaction_index = 4;
+    string from_address = 5;
+    optional string to_address = 6;
+    string value = 7;
+    uint64 gas = 8;
+    string gas_price = 9;
+    optional uint64 gas_used = 10;
+    uint64 nonce = 11;
+    string input = 12;
+    optional uint32 status = 13;
+    optional uint64 cumulative_gas_used = 14;
+    optional string effective_gas_price = 15;
+    optional uint32 type = 16;
+}
+
+// Status request message
+message StatusRequest {}
+
+// Status response message
+message StatusResponse {
+    string node_version = 1;
+    uint64 chain_id = 2;
+    string network_id = 3;
+    uint64 block_height = 4;
+    uint32 peer_count = 5;
+    string sync_status = 6;
+    uint64 uptime_seconds = 7;
+    uint64 memory_usage_mb = 8;
+    double cpu_usage_percent = 9;
+    double disk_usage_gb = 10;
+}
+
+// Metrics request message
+message MetricsRequest {}
+
+// Metrics response message
+message MetricsResponse {
+    uint32 active_connections = 1;
+    uint64 total_requests = 2;
+    double requests_per_second = 3;
+    double avg_response_time_ms = 4;
+    double error_rate_percent = 5;
+    double throughput_mbps = 6;
+    double cpu_usage_percent = 7;
+    uint64 memory_usage_mb = 8;
+    double network_in_mbps = 9;
+    double network_out_mbps = 10;
+}
+
+// GhostBridge service definition
+service GhostBridge {
+    rpc GetBlock(BlockRequest) returns (BlockResponse);
+    rpc GetTransaction(TransactionRequest) returns (TransactionResponse);
+    rpc GetStatus(StatusRequest) returns (StatusResponse);
+    rpc GetMetrics(MetricsRequest) returns (MetricsResponse);
+}

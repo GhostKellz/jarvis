@@ -1,0 +1,100 @@
+[package]
+name = "jarvis-nv"
+version = "0.1.0"
+edition = "2024"
+authors = ["Christopher Kelley <ckelley@ghostkellz.sh>"]
+description = "NVIDIA-Accelerated AI Agent for GhostChain Nodes"
+license = "MIT"
+repository = "https://github.com/ghostkellz/jarvis"
+
+[[bin]]
+name = "jarvis-nv"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration and serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+clap = { version = "4.4", features = ["derive", "env"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+url = "2.5"
+dirs = "5.0"
+rand = "0.8"
+warp = "0.3"
+os_info = "3.7"
+
+# Network protocols (IPv6/QUIC/HTTP3/gRPC)
+tonic = { version = "0.11", features = ["tls", "transport"] }
+prost = "0.12"
+quinn = { version = "0.10", features = ["tls-rustls"], optional = true }
+rustls = { version = "0.21", features = ["quic"] }
+h3 = { version = "0.0.4", optional = true }
+h3-quinn = { version = "0.0.4", optional = true }
+socket2 = { version = "0.5", features = ["all"] }
+
+# GPU acceleration and CUDA
+cudarc = { version = "0.11", features = ["std", "cublas", "curand"], optional = true }
+candle-core = { version = "0.4", features = ["cuda"], optional = true }
+candle-nn = { version = "0.4", optional = true }
+candle-transformers = { version = "0.4", optional = true }
+
+# AI/ML capabilities
+ollama-rs = "0.1"
+reqwest = { version = "0.11", features = ["json", "stream"] }
+
+# Metrics and monitoring
+prometheus = "0.13"
+sysinfo = "0.30"
+nvml-wrapper = { version = "0.9", optional = true }
+
+# Database and storage
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
+
+# Cryptography (for Web5/ZNS integration)
+ring = "0.17"
+rustls-native-certs = "0.6"
+
+# Blockchain integration
+web3 = { version = "0.19", features = ["http-tls", "ws-tls-tokio"], optional = true }
+ethers = { version = "2.0", features = ["rustls", "ws"], optional = true }
+
+# Container and system integration
+bollard = "0.15"  # Docker API
+nix = "0.27"      # Unix system calls
+
+# Workspace dependencies
+jarvis-core = { path = "../jarvis-core" }
+
+[dev-dependencies]
+tempfile = "3.0"
+criterion = "0.5"
+
+[build-dependencies]
+tonic-build = "0.11"
+
+[features]
+default = ["web5", "node-integration"]
+gpu = ["cudarc", "candle-core", "candle-nn", "candle-transformers", "nvml-wrapper"]
+node-integration = ["web3", "ethers"]
+web5 = ["quinn", "h3", "h3-quinn"]
+shroud-integration = []  # For future shroud library integration
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# GPU optimizations
+[profile.gpu]
+inherits = "release"
+opt-level = 3
+lto = "fat"

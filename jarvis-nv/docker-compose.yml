@@ -1,0 +1,190 @@
+version: '3.8'
+
+services:
+  # JARVIS-NV AI Agent
+  jarvis-nv:
+    build:
+      context: ../..
+      dockerfile: jarvis-nv/Dockerfile
+    container_name: jarvis-nv-agent
+    restart: unless-stopped
+    
+    # GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # Environment configuration
+    environment:
+      - RUST_LOG=jarvis_nv=info,jarvis_core=info
+      - JARVIS_NV_GPU_ENABLED=true
+      - JARVIS_NV_GPU_DEVICE_ID=0
+      - JARVIS_NV_NODE_GHOSTCHAIN_ENABLED=true
+      - JARVIS_NV_NODE_GHOSTCHAIN_URL=http://ghostchain:8545
+      - JARVIS_NV_WEB5_ENABLED=true
+      - JARVIS_NV_WEB5_BIND_ADDRESS=[::]:3000
+      - JARVIS_NV_METRICS_ENABLED=true
+      - JARVIS_NV_METRICS_BIND_ADDRESS=0.0.0.0:9090
+      - JARVIS_NV_BRIDGE_ENABLED=true
+      - JARVIS_NV_BRIDGE_GRPC_BIND_ADDRESS=[::]:50051
+      - JARVIS_NV_BRIDGE_QUIC_BIND_ADDRESS=[::]:4433
+    
+    # Port mappings
+    ports:
+      - "3000:3000"   # Web5/HTTP3
+      - "4433:4433"   # QUIC
+      - "9090:9090"   # Metrics
+      - "50051:50051" # gRPC
+    
+    # Volume mounts
+    volumes:
+      - jarvis_data:/app/data
+      - jarvis_models:/app/models
+      - jarvis_logs:/app/logs
+      - ./config.toml:/app/config.toml:ro
+    
+    # Network configuration
+    networks:
+      - ghostchain-net
+      - jarvis-net
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "./jarvis-nv", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Dependencies
+    depends_on:
+      - ghostchain
+      - prometheus
+      - grafana
+
+  # GhostChain Node (simulated)
+  ghostchain:
+    image: ethereum/client-go:stable
+    container_name: ghostchain-node
+    restart: unless-stopped
+    
+    command: |
+      --dev
+      --http
+      --http.addr 0.0.0.0
+      --http.port 8545
+      --http.api eth,net,web3,personal
+      --ws
+      --ws.addr 0.0.0.0
+      --ws.port 8546
+      --ws.api eth,net,web3,personal
+      --rpc.allow-unprotected-txs
+    
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "30303:30303"
+    
+    volumes:
+      - ghostchain_data:/root/.ethereum
+    
+    networks:
+      - ghostchain-net
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: jarvis-prometheus
+    restart: unless-stopped
+    
+    ports:
+      - "9191:9090"
+    
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    
+    networks:
+      - jarvis-net
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: jarvis-grafana
+    restart: unless-stopped
+    
+    ports:
+      - "3001:3000"
+    
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=jarvis123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    
+    networks:
+      - jarvis-net
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: jarvis-redis
+    restart: unless-stopped
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      - redis_data:/data
+    
+    command: redis-server --appendonly yes
+    
+    networks:
+      - jarvis-net
+
+# Networks
+networks:
+  ghostchain-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  
+  jarvis-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# Volumes
+volumes:
+  jarvis_data:
+    driver: local
+  jarvis_models:
+    driver: local
+  jarvis_logs:
+    driver: local
+  ghostchain_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  redis_data:
+    driver: local
