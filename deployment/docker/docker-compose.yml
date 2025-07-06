@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  jarvisd:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.jarvisd
+    container_name: jarvisd
+    restart: unless-stopped
+    
+    # Environment configuration
+    environment:
+      - RUST_LOG=jarvisd=info,jarvis_core=info,jarvis_agent=info
+      - JARVIS_CONFIG_DIR=/etc/jarvis
+      - JARVIS_DATA_DIR=/var/lib/jarvis
+      - JARVIS_LOG_DIR=/var/log/jarvis
+    
+    # Port mappings (adjust as needed)
+    ports:
+      - "8080:8080"   # HTTP/gRPC port
+      - "8443:8443"   # HTTPS/TLS port
+    
+    # Volume mounts for persistence
+    volumes:
+      - jarvis-data:/var/lib/jarvis
+      - jarvis-logs:/var/log/jarvis
+      - ./config:/etc/jarvis:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # For Docker integration (optional)
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "jarvisd", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Network configuration
+    networks:
+      - jarvis-network
+    
+    # Logging configuration
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Optional: Add a monitoring/metrics service
+  jarvis-metrics:
+    image: prom/prometheus:latest
+    container_name: jarvis-metrics
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - jarvis-network
+    profiles:
+      - monitoring
+
+  # Optional: Add Grafana for visualization
+  jarvis-dashboard:
+    image: grafana/grafana:latest
+    container_name: jarvis-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=jarvis123
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - jarvis-network
+    profiles:
+      - monitoring
+    depends_on:
+      - jarvis-metrics
+
+# Named volumes for data persistence
+volumes:
+  jarvis-data:
+    driver: local
+  jarvis-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# Network configuration
+networks:
+  jarvis-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -44,60 +44,156 @@ The current implementation provides:
 
 ## 🏗️ Current Architecture
 
-The Jarvis blockchain system is built around specialized agents that handle different aspects of blockchain operations:
+The Jarvis blockchain system is built around an orchestrated agent framework that provides unified blockchain monitoring, AI-powered analysis, and autonomous operation capabilities:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Jarvis CLI Interface                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  blockchain analyze | optimize | audit | monitor | status      │
+│  blockchain status | health | analyze | start | stop           │
 └─────────────────┬───────────────────────────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────────────────────────┐
-│              Blockchain Agent Orchestrator                     │
-├─────────────────┬─────────────────┬─────────────────────────────┤
-│ IPv6 Network    │ Smart Contract  │ Performance                 │
-│ Optimizer       │ Auditor         │ Monitor                     │
-└─────────────────┴─────────────────┴─────────────────────────────┘
+│         BlockchainAgentOrchestrator (gRPC/HTTP/3)              │
+├─────────────────┬───────────────┬───────────────┬───────────────┤
+│ Blockchain      │ AI Blockchain │ Agent Status  │ Memory Store  │
+│ Monitor Agent   │ Analyzer      │ Manager       │ (SQLite)      │
+└─────────────────┴───────────────┴───────────────┴───────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   GhostChain    │    │   Zig-based     │    │   Ethereum      │
-│   Integration   │    │   Blockchains   │    │   Compatible    │
-│   (Ready)       │    │   (Planned)     │    │   (Planned)     │
+│ Real-time       │    │ LLM Router      │    │ Document Store  │
+│ Alert System    │    │ (Ollama/Local)  │    │ Agent Memory    │
+│ IPv6/QUIC       │    │ Pattern Analysis│    │ Persistent      │
+│ Monitoring      │    │ Risk Scoring    │    │ State           │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         ▼                       ▼                       ▼
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   GhostChain    │    │ Autonomous      │    │   Future        │
+│   gRPC Client   │    │ Daemon (jarvisd)│    │   Networks      │
+│   (Ready)       │    │ Service/Container│    │   (Planned)     │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 📋 Current Implementation
+## 📋 Agent Architecture
 
-### Blockchain Agents
+### Core Components
 
-The system includes several specialized agents:
+The blockchain system consists of several key components:
 
-1. **IPv6OptimizerAgent**: Optimizes blockchain networks for IPv6 connectivity
-2. **QUICOptimizerAgent**: Implements QUIC protocol optimizations  
-3. **ContractAuditorAgent**: Performs smart contract security analysis
-4. **PerformanceMonitorAgent**: Monitors blockchain performance metrics
-5. **MaintenanceSchedulerAgent**: Schedules and executes maintenance tasks
+#### 1. **BlockchainAgentOrchestrator** (`jarvis-agent/src/orchestrator.rs`)
 
-### CLI Commands
+The central coordinator that manages all blockchain agents:
+- **Agent Lifecycle Management**: Start, stop, restart failed agents
+- **Inter-Agent Communication**: Message passing between agents via channels
+- **Status Monitoring**: Real-time tracking of agent health and performance
+- **Auto-Recovery**: Automatic restart of failed agents with configurable thresholds
+- **Background Processing**: Non-blocking execution of agent tasks
 
-All blockchain operations are accessible through the CLI:
+```rust
+// Key features of the orchestrator
+pub struct BlockchainAgentOrchestrator {
+    config: OrchestratorConfig,
+    grpc_client: GhostChainClient,
+    memory: MemoryStore,
+    llm_router: LLMRouter,
+    
+    // Active agent instances
+    monitor_agent: Option<BlockchainMonitorAgent>,
+    ai_analyzer: Option<AIBlockchainAnalyzer>,
+    
+    // Communication and status tracking
+    message_sender: mpsc::UnboundedSender<AgentMessage>,
+    agent_status: Arc<RwLock<HashMap<String, AgentStatus>>>,
+    running_tasks: Vec<JoinHandle<()>>,
+}
+```
+
+#### 2. **BlockchainMonitorAgent** (`jarvis-agent/src/blockchain_monitor.rs`)
+
+Real-time blockchain monitoring with gRPC connectivity:
+- **Network Monitoring**: Real-time blockchain network status and metrics
+- **Alert Generation**: Automated alerts for anomalies and performance issues
+- **IPv6/QUIC Support**: Modern network protocol optimization
+- **Multi-Network Support**: Monitor multiple blockchain networks simultaneously
+
+```rust
+// Alert types supported by the monitor
+pub enum AlertType {
+    HighTransactionVolume,
+    UnusualGasPrice,
+    NetworkCongestion,
+    SuspiciousActivity,
+    PerformanceDegradation,
+    SecurityThreat,
+}
+
+// Alert severity levels
+pub enum AlertSeverity {
+    Info,
+    Warning,
+    Critical,
+    Emergency,
+}
+```
+
+#### 3. **AIBlockchainAnalyzer** (`jarvis-agent/src/ai_analyzer.rs`)
+
+AI-powered blockchain analysis using local LLMs:
+- **Pattern Recognition**: Identify unusual patterns in blockchain data
+- **Risk Assessment**: AI-powered risk scoring (0-100 scale)
+- **Predictive Analysis**: Forecast potential issues before they occur
+- **Automated Recommendations**: AI-generated action recommendations
+- **Local LLM Integration**: Uses Ollama and other local AI models
+
+```rust
+// AI analysis capabilities
+pub enum AnalysisType {
+    SecurityThreat,
+    PerformanceOptimization,
+    AnomalyDetection,
+    PatternRecognition,
+    PredictiveAnalysis,
+    TransactionAnalysis,
+}
+
+// Automated actions the AI can recommend
+pub enum ActionType {
+    AlertStakeholders,
+    ScaleResources,
+    OptimizeParameters,
+    BlockSuspiciousActivity,
+    UpdateConfiguration,
+}
+```
+
+#### 4. **Memory Store & Document Storage** (`jarvis-core/src/memory.rs`)
+
+Persistent agent memory using SQLite:
+- **Document Storage**: Store and retrieve blockchain data, alerts, and analysis results
+- **Agent State Persistence**: Maintain agent state across restarts
+- **Query Interface**: Flexible document querying and retrieval
+- **Performance Optimization**: Efficient SQLite operations with connection pooling
+
+### CLI Integration
+
+Current CLI commands integrate with the new agent architecture:
 
 ```bash
-# Analyze blockchain network performance
-jarvis blockchain analyze --network ghostchain
+# Start the blockchain agent orchestrator
+cargo run -- blockchain start
 
-# Optimize network settings for IPv6 and QUIC
-jarvis blockchain optimize --strategy ipv6 --target ghostchain
+# Stop all agents gracefully
+cargo run -- blockchain stop
 
-# Audit smart contracts for security and gas optimization  
-jarvis blockchain audit --contract 0x1234... --depth comprehensive
+# Check agent health and status
+cargo run -- blockchain health
+cargo run -- blockchain status
 
-# Monitor blockchain performance in real-time
-jarvis blockchain monitor --network ghostchain --duration 60m
-
-# Schedule or execute maintenance tasks
+# Trigger AI analysis
+cargo run -- blockchain analyze --network ghostchain
+```
 jarvis blockchain maintenance --action schedule --type security_update
 
 # Configure blockchain agent settings
@@ -439,16 +535,142 @@ impl AgentRunner {
 }
 ```
 
-## 🔮 Future Development
+## 🤖 Autonomous Daemon Mode (`jarvisd`)
 
-The current implementation provides a solid foundation for:
+Jarvis now includes a dedicated daemon service for autonomous blockchain monitoring and management. The `jarvisd` binary provides hands-free operation suitable for production environments, Docker containers, and NVIDIA GPU acceleration.
 
-1. **Real Blockchain Integration**: Direct RPC connections to blockchain nodes
-2. **Advanced Analytics**: ML-based pattern recognition and anomaly detection
-3. **Cross-chain Operations**: Bridge monitoring and cross-chain transaction analysis
-4. **DeFi Protocol Support**: Automated liquidity management and yield optimization
-5. **Enterprise Features**: Advanced alerting, reporting, and compliance tools
+### Key Features
+
+- **Background Service**: Runs as a systemd service or Docker container
+- **Zero-Touch Operation**: Autonomous blockchain monitoring and AI analysis
+- **Modern Architecture**: IPv6, QUIC, HTTP/3, and gRPC support
+- **GPU Acceleration**: NVIDIA container support for AI workloads
+- **Production Ready**: Health checks, graceful shutdown, and error recovery
+- **Security Focused**: Zero-trust architecture with encryption
+
+### Quick Start with Daemon
+
+```bash
+# Build the daemon
+cargo build --release --bin jarvisd
+
+# Run in foreground (for testing)
+./target/release/jarvisd
+
+# Run as systemd service (recommended for production)
+sudo ./deployment/deploy.sh install
+
+# Check daemon status
+sudo systemctl status jarvisd
+jarvisd status
+
+# Docker deployment
+./deployment/deploy.sh docker
+
+# NVIDIA GPU-enabled deployment  
+./deployment/deploy.sh nvidia
+```
+
+### Daemon Configuration
+
+The daemon uses an extended configuration format with daemon-specific settings:
+
+```toml
+[general]
+mode = "daemon"  # daemon, interactive, or hybrid
+
+[daemon]
+pid_file = "/var/run/jarvisd.pid"
+user = "jarvis"
+group = "jarvis"
+max_memory_usage = "2GB"
+shutdown_timeout = "30s"
+
+[agents.blockchain_monitor]
+enabled = true
+priority = "high"
+restart_policy = "always"
+
+[agents.ai_analyzer]
+enabled = true
+analysis_interval = "5m"
+anomaly_detection = true
+
+[security]
+enable_zero_trust = true
+encryption_at_rest = true
+audit_enabled = true
+```
+
+### Service Management
+
+```bash
+# Systemd service commands
+sudo systemctl start jarvisd
+sudo systemctl stop jarvisd
+sudo systemctl restart jarvisd
+sudo systemctl enable jarvisd   # Auto-start on boot
+
+# Docker container commands
+docker-compose up -d jarvisd
+docker-compose logs -f jarvisd
+docker-compose restart jarvisd
+
+# Daemon-specific commands
+jarvisd start           # Start daemon
+jarvisd stop            # Stop daemon  
+jarvisd status          # Show status
+jarvisd restart         # Restart daemon
+jarvisd logs -f         # Follow logs
+```
+
+### Deployment Options
+
+#### 1. **Systemd Service** (Production)
+- Native OS integration
+- Automatic startup and recovery
+- Resource limits and security isolation
+- Integrated logging with journald
+
+#### 2. **Docker Container** (Scalable)
+- Consistent deployment across environments  
+- Built-in monitoring with Prometheus/Grafana
+- Easy scaling and load balancing
+- Volume persistence for data
+
+#### 3. **NVIDIA Container** (AI-Heavy)
+- GPU acceleration for AI analysis
+- CUDA support for machine learning
+- Optimized for anomaly detection
+- Local LLM processing (Ollama integration)
+
+### Monitoring and Health Checks
+
+The daemon includes comprehensive monitoring:
+
+```bash
+# Health check endpoints
+curl http://localhost:8080/health
+curl http://localhost:8080/status
+curl http://localhost:9090/metrics  # Prometheus metrics
+
+# Log monitoring
+sudo journalctl -u jarvisd -f      # System logs
+tail -f /var/log/jarvis/jarvisd.log # Application logs
+tail -f /var/log/jarvis/audit.log   # Security audit logs
+```
+
+### Production Deployment
+
+For production use, the daemon provides:
+
+- **Automatic Recovery**: Failed agents are automatically restarted
+- **Resource Management**: Memory and CPU limits with monitoring
+- **Security Hardening**: User isolation, file system restrictions
+- **Audit Logging**: Complete audit trail of all actions
+- **Configuration Reloading**: Hot-reload configuration without restart
+- **Graceful Shutdown**: Clean shutdown with state preservation
+
+See `deployment/README.md` for complete deployment instructions and best practices.
 
 ---
-
-*This blockchain integration guide reflects the current state of the Jarvis project and will be updated as new features are implemented.* 🚀

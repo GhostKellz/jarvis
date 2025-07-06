@@ -1,0 +1,236 @@
+# Jarvis Daemon Configuration Template
+# This configuration is optimized for autonomous operation
+
+[general]
+name = "jarvis-daemon"
+version = "0.1.0"
+mode = "daemon"  # daemon, interactive, or hybrid
+
+[logging]
+level = "info"
+file = "/var/log/jarvis/jarvisd.log"
+max_size = "100MB"
+max_files = 5
+console = false  # Disable console logging for daemon mode
+
+[storage]
+database_path = "/var/lib/jarvis/jarvis.db"
+backup_interval = "1h"
+backup_retention = "7d"
+compression = true
+
+[blockchain]
+# GhostChain Configuration
+enabled = true
+network = "mainnet"  # mainnet, testnet, devnet
+node_urls = [
+    "https://rpc.ghostchain.io:443",
+    "https://rpc2.ghostchain.io:443"
+]
+websocket_urls = [
+    "wss://ws.ghostchain.io",
+    "wss://ws2.ghostchain.io"
+]
+grpc_endpoints = [
+    "grpc.ghostchain.io:9090",
+    "grpc2.ghostchain.io:9090"
+]
+
+# Monitoring settings
+monitor_interval = "30s"
+block_confirmation_depth = 6
+transaction_timeout = "300s"
+max_reorg_depth = 100
+
+# Alerts and thresholds
+alert_on_high_gas = true
+gas_threshold = 1000000000  # 1 Gwei
+alert_on_network_congestion = true
+congestion_threshold = 0.8  # 80% block utilization
+
+[network]
+# IPv6 and modern networking
+enable_ipv6 = true
+prefer_ipv6 = false
+enable_quic = true
+enable_http3 = true
+
+# Connection settings
+max_connections = 100
+connection_timeout = "30s"
+keep_alive = "60s"
+request_timeout = "30s"
+
+# TLS settings
+enable_tls = true
+verify_certificates = true
+tls_version = "1.3"
+
+# gRPC settings
+grpc_max_message_size = "4MB"
+grpc_keepalive_time = "30s"
+grpc_keepalive_timeout = "5s"
+grpc_keepalive_permit_without_calls = true
+
+[agents]
+# Agent orchestration settings
+max_concurrent_agents = 10
+agent_restart_delay = "30s"
+health_check_interval = "60s"
+agent_timeout = "300s"
+
+# Blockchain monitoring agent
+[agents.blockchain_monitor]
+enabled = true
+priority = "high"
+restart_policy = "always"
+monitor_blocks = true
+monitor_transactions = true
+monitor_contracts = true
+monitor_governance = true
+
+# AI analysis agent  
+[agents.ai_analyzer]
+enabled = true
+priority = "medium"
+restart_policy = "on-failure"
+analysis_interval = "5m"
+anomaly_detection = true
+pattern_recognition = true
+predictive_analysis = false  # Disabled by default
+
+# Security monitoring agent
+[agents.security_monitor]
+enabled = true
+priority = "critical"
+restart_policy = "always"
+scan_interval = "1m"
+threat_detection = true
+vulnerability_scanning = true
+
+# Performance optimization agent
+[agents.performance_optimizer]
+enabled = true
+priority = "low"
+restart_policy = "on-failure"
+optimization_interval = "15m"
+auto_scaling = false  # Manual scaling only
+resource_monitoring = true
+
+[ai]
+# AI/ML configuration
+provider = "ollama"  # ollama, openai, anthropic, local
+model = "llama2:7b"
+api_endpoint = "http://localhost:11434"
+api_key = ""  # Not needed for Ollama
+timeout = "120s"
+
+# Analysis settings
+enable_sentiment_analysis = true
+enable_anomaly_detection = true
+enable_pattern_recognition = true
+enable_predictive_modeling = false
+confidence_threshold = 0.8
+
+# Local model settings (for offline operation)
+local_model_path = "/var/lib/jarvis/models"
+enable_gpu_acceleration = true
+max_context_length = 4096
+temperature = 0.1  # Conservative for analysis
+
+[security]
+# Zero-trust architecture
+enable_zero_trust = true
+require_authentication = true
+session_timeout = "1h"
+max_failed_attempts = 3
+lockout_duration = "15m"
+
+# Encryption
+encryption_at_rest = true
+encryption_in_transit = true
+key_rotation_interval = "30d"
+
+# Access control
+admin_api_enabled = false  # Disable for production
+read_only_api_enabled = true
+api_rate_limit = "100/hour"
+
+# Audit logging
+audit_enabled = true
+audit_file = "/var/log/jarvis/audit.log"
+audit_retention = "90d"
+
+[alerts]
+# Alert configuration
+enabled = true
+channels = ["syslog", "webhook"]  # syslog, email, webhook, slack
+
+# Syslog alerts
+[alerts.syslog]
+enabled = true
+facility = "daemon"
+severity = "warning"
+
+# Webhook alerts
+[alerts.webhook]
+enabled = false
+url = "https://hooks.example.com/jarvis"
+secret = ""
+timeout = "10s"
+
+# Email alerts (disabled by default for daemon)
+[alerts.email]
+enabled = false
+smtp_server = "localhost:587"
+from = "jarvis@localhost"
+to = ["admin@localhost"]
+
+[metrics]
+# Metrics and monitoring
+enabled = true
+port = 9090
+path = "/metrics"
+collection_interval = "30s"
+
+# Prometheus integration
+prometheus_enabled = true
+prometheus_namespace = "jarvis"
+
+# Custom metrics
+track_agent_performance = true
+track_blockchain_metrics = true
+track_ai_model_metrics = true
+track_system_resources = true
+
+[api]
+# API server configuration (for monitoring/control)
+enabled = true
+bind_address = "127.0.0.1"  # Localhost only for security
+port = 8080
+tls_enabled = false  # Use reverse proxy for TLS
+cors_enabled = false
+
+# Read-only endpoints for monitoring
+enable_status_endpoint = true
+enable_health_endpoint = true
+enable_metrics_endpoint = true
+enable_logs_endpoint = false  # Security risk
+
+[daemon]
+# Daemon-specific settings
+pid_file = "/var/run/jarvisd.pid"
+user = "jarvis"
+group = "jarvis"
+working_directory = "/var/lib/jarvis"
+
+# Process management
+max_memory_usage = "2GB"
+max_cpu_usage = 80  # Percentage
+restart_on_memory_limit = true
+restart_on_cpu_limit = false
+
+# Graceful shutdown
+shutdown_timeout = "30s"
+save_state_on_shutdown = true
+backup_on_shutdown = true

@@ -1,0 +1,97 @@
+# Jarvis Daemon Dockerfile
+# Multi-stage build for optimized container size
+
+# Build stage
+FROM rust:1.75-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    musl-dev \
+    protobuf-dev \
+    protoc \
+    openssl-dev \
+    pkgconfig \
+    gcc \
+    g++
+
+# Create app user
+RUN addgroup -g 1000 jarvis && \
+    adduser -D -s /bin/sh -u 1000 -G jarvis jarvis
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY Cargo.toml Cargo.lock ./
+COPY jarvis-core/Cargo.toml ./jarvis-core/
+COPY jarvis-agent/Cargo.toml ./jarvis-agent/
+COPY jarvis-shell/Cargo.toml ./jarvis-shell/
+COPY jarvis-nvim/Cargo.toml ./jarvis-nvim/
+
+# Create dummy source files to build dependencies
+RUN mkdir -p src/bin jarvis-core/src jarvis-agent/src jarvis-shell/src jarvis-nvim/src && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "fn main() {}" > src/bin/jarvisd.rs && \
+    echo "// dummy" > jarvis-core/src/lib.rs && \
+    echo "// dummy" > jarvis-agent/src/lib.rs && \
+    echo "// dummy" > jarvis-shell/src/lib.rs && \
+    echo "// dummy" > jarvis-nvim/src/lib.rs
+
+# Build dependencies
+RUN cargo build --release --bin jarvisd && rm -rf src jarvis-*/src
+
+# Copy actual source code
+COPY . .
+
+# Update timestamps to force rebuild of application code
+RUN touch src/main.rs src/bin/jarvisd.rs
+
+# Build the daemon
+RUN cargo build --release --bin jarvisd
+
+# Runtime stage
+FROM alpine:3.19 AS runtime
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    ca-certificates \
+    libgcc \
+    openssl \
+    tzdata
+
+# Create app user and directories
+RUN addgroup -g 1000 jarvis && \
+    adduser -D -s /bin/sh -u 1000 -G jarvis jarvis && \
+    mkdir -p /etc/jarvis /var/lib/jarvis /var/log/jarvis /var/run && \
+    chown -R jarvis:jarvis /var/lib/jarvis /var/log/jarvis /var/run
+
+# Copy binary from builder stage
+COPY --from=builder /app/target/release/jarvisd /usr/local/bin/jarvisd
+
+# Copy default configuration
+COPY --chown=jarvis:jarvis jarvis.toml.example /etc/jarvis/jarvis.toml
+
+# Set executable permissions
+RUN chmod +x /usr/local/bin/jarvisd
+
+# Switch to non-root user
+USER jarvis
+
+# Set working directory
+WORKDIR /home/jarvis
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD jarvisd status || exit 1
+
+# Expose ports (if needed for gRPC/HTTP services)
+EXPOSE 8080 8443
+
+# Set environment variables
+ENV RUST_LOG=jarvisd=info,jarvis_core=info,jarvis_agent=info
+ENV JARVIS_CONFIG_DIR=/etc/jarvis
+ENV JARVIS_DATA_DIR=/var/lib/jarvis
+ENV JARVIS_LOG_DIR=/var/log/jarvis
+
+# Default command
+CMD ["jarvisd", "--config", "/etc/jarvis/jarvis.toml", "--pid-file", "/var/run/jarvisd.pid"]

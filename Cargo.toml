@@ -11,6 +11,10 @@ repository = "https://github.com/ghostkellz/jarvis"
 name = "jarvis"
 path = "src/main.rs"
 
+[[bin]]
+name = "jarvisd"
+path = "src/bin/jarvisd.rs"
+
 [workspace]
 members = [
     "jarvis-core",
