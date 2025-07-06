@@ -1,10 +1,10 @@
 use anyhow::Result;
-use jarvis_core::{LLMRouter, MemoryStore};
 use jarvis_agent::AgentRunner;
+use jarvis_core::{LLMRouter, MemoryStore};
 use nvim_rs::{Neovim, create::tokio as create};
-use tokio::net::UnixStream;
 use serde_json::Value;
 use std::sync::Arc;
+use tokio::net::UnixStream;
 
 pub struct JarvisNvim {
     nvim: Neovim<UnixStream>,
@@ -18,16 +18,16 @@ impl JarvisNvim {
         // Connect to Neovim
         let stream = UnixStream::connect(socket_path).await?;
         let (nvim, io_handler) = create::new_unix(stream);
-        
+
         // Spawn the IO handler
         tokio::spawn(io_handler);
-        
+
         // Initialize Jarvis components
         let config = jarvis_core::Config::load(None).await?;
         let memory = Arc::new(MemoryStore::new(&config.database_path).await?);
         let llm = Arc::new(LLMRouter::new(&config).await?);
         let agent = Arc::new(AgentRunner::new(memory.clone(), llm.clone()).await?);
-        
+
         Ok(Self {
             nvim,
             agent,
@@ -45,33 +45,35 @@ impl JarvisNvim {
 
         // Get file context
         let context = self.get_file_context().await?;
-        
+
         // Generate explanation
         let prompt = format!(
             "Explain this code selection:\n\n```\n{}\n```\n\nFile context:\n{}",
             selection, context
         );
-        
+
         let response = self.llm.generate(&prompt, None).await?;
-        
+
         // Display in floating window
-        self.show_floating_window("Jarvis Explanation", &response).await?;
-        
+        self.show_floating_window("Jarvis Explanation", &response)
+            .await?;
+
         Ok(())
     }
 
     pub async fn suggest_improvements(&self) -> Result<()> {
         let selection = self.get_visual_selection().await?;
         let context = self.get_file_context().await?;
-        
+
         let prompt = format!(
             "Suggest improvements for this code:\n\n```\n{}\n```\n\nContext:\n{}",
             selection, context
         );
-        
+
         let response = self.llm.generate(&prompt, None).await?;
-        self.show_floating_window("Jarvis Suggestions", &response).await?;
-        
+        self.show_floating_window("Jarvis Suggestions", &response)
+            .await?;
+
         Ok(())
     }
 
@@ -79,21 +81,26 @@ impl JarvisNvim {
         // Get diagnostics from LSP
         let diagnostics = self.get_diagnostics().await?;
         if diagnostics.is_empty() {
-            self.nvim.echo(&[("No errors found!", None)], false, &Value::Null).await?;
+            self.nvim
+                .echo(&[("No errors found!", None)], false, &Value::Null)
+                .await?;
             return Ok(());
         }
 
         let current_line = self.get_current_line().await?;
         let file_content = self.get_buffer_content().await?;
-        
+
         let prompt = format!(
             "Fix these errors in the code:\n\nErrors:\n{}\n\nCurrent line: {}\n\nFile content:\n{}",
-            diagnostics.join("\n"), current_line, file_content
+            diagnostics.join("\n"),
+            current_line,
+            file_content
         );
-        
+
         let response = self.llm.generate(&prompt, None).await?;
-        self.show_floating_window("Jarvis Error Fix", &response).await?;
-        
+        self.show_floating_window("Jarvis Error Fix", &response)
+            .await?;
+
         Ok(())
     }
 
@@ -105,7 +112,7 @@ impl JarvisNvim {
         self.nvim.command("setlocal bufhidden=hide").await?;
         self.nvim.command("setlocal noswapfile").await?;
         self.nvim.command("file Jarvis\\ Chat").await?;
-        
+
         // Set up chat buffer with initial message
         let initial_content = vec![
             "🤖 Jarvis Chat Mode".to_string(),
@@ -115,26 +122,28 @@ impl JarvisNvim {
             "".to_string(),
             "> ".to_string(),
         ];
-        
-        self.nvim.set_current_line(&initial_content.join("\n")).await?;
-        
+
+        self.nvim
+            .set_current_line(&initial_content.join("\n"))
+            .await?;
+
         Ok(())
     }
 
     pub async fn generate_code(&self, description: &str) -> Result<()> {
         let file_type = self.get_current_filetype().await?;
         let context = self.get_file_context().await?;
-        
+
         let prompt = format!(
             "Generate {} code for: {}\n\nContext:\n{}",
             file_type, description, context
         );
-        
+
         let response = self.llm.generate(&prompt, None).await?;
-        
+
         // Insert generated code at cursor
         self.insert_at_cursor(&response).await?;
-        
+
         Ok(())
     }
 
@@ -156,7 +165,7 @@ impl JarvisNvim {
         let filename = self.nvim.eval("expand('%:t')").await?;
         let filetype = self.nvim.eval("&filetype").await?;
         let line_count = self.nvim.eval("line('$')").await?;
-        
+
         Ok(format!(
             "File: {}\nType: {}\nLines: {}",
             filename.as_str().unwrap_or("unknown"),
@@ -216,7 +225,7 @@ impl JarvisNvim {
             "#,
             content, title
         );
-        
+
         self.nvim.exec_lua(&lua_code, vec![]).await?;
         Ok(())
     }

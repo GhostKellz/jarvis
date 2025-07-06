@@ -1,9 +1,9 @@
+use crate::ai_integration::AIIntegration;
 use anyhow::Result;
+use std::sync::Arc;
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use std::sync::Arc;
-use crate::ai_integration::AIIntegration;
 
 pub struct JarvisLspServer {
     client: Client,
@@ -75,8 +75,11 @@ impl LanguageServer for JarvisLspServer {
         let position = &params.text_document_position_params.position;
 
         // This would get the symbol at position and provide AI-powered explanations
-        let content = format!("Jarvis AI explanation for symbol at {}:{}", position.line, position.character);
-        
+        let content = format!(
+            "Jarvis AI explanation for symbol at {}:{}",
+            position.line, position.character
+        );
+
         Ok(Some(Hover {
             contents: HoverContents::Scalar(MarkedString::String(content)),
             range: None,
@@ -144,7 +147,10 @@ impl LanguageServer for JarvisLspServer {
         Ok(Some(actions))
     }
 
-    async fn execute_command(&self, params: ExecuteCommandParams) -> LspResult<Option<serde_json::Value>> {
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> LspResult<Option<serde_json::Value>> {
         match params.command.as_str() {
             "jarvis.explain" => {
                 // Extract parameters and call AI explanation
@@ -173,7 +179,10 @@ impl LanguageServer for JarvisLspServer {
             }
             _ => {
                 self.client
-                    .log_message(MessageType::ERROR, &format!("Unknown command: {}", params.command))
+                    .log_message(
+                        MessageType::ERROR,
+                        &format!("Unknown command: {}", params.command),
+                    )
                     .await;
             }
         }
@@ -183,15 +192,15 @@ impl LanguageServer for JarvisLspServer {
 
     async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
         // AI-powered code completion
-        let items = vec![
-            CompletionItem {
-                label: "jarvis_suggest".to_string(),
-                kind: Some(CompletionItemKind::FUNCTION),
-                detail: Some("AI-powered suggestion".to_string()),
-                documentation: Some(Documentation::String("Get AI suggestions for code completion".to_string())),
-                ..Default::default()
-            }
-        ];
+        let items = vec![CompletionItem {
+            label: "jarvis_suggest".to_string(),
+            kind: Some(CompletionItemKind::FUNCTION),
+            detail: Some("AI-powered suggestion".to_string()),
+            documentation: Some(Documentation::String(
+                "Get AI suggestions for code completion".to_string(),
+            )),
+            ..Default::default()
+        }];
 
         Ok(Some(CompletionResponse::Array(items)))
     }

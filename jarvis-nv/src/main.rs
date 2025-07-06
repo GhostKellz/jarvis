@@ -1,10 +1,10 @@
 /*!
  * JARVIS-NV: NVIDIA-Accelerated AI Agent for GhostChain Nodes
- * 
+ *
  * A GPU-accelerated daemon designed to assist and monitor ghostchain and ghostplane nodes.
- * Runs alongside or inside blockchain nodes, providing real-time insight, telemetry, 
+ * Runs alongside or inside blockchain nodes, providing real-time insight, telemetry,
  * and AI-enhanced operations leveraging NVIDIA CUDA and container runtime.
- * 
+ *
  * This is separate from jarvisd (the main AI daemon) and is specialized for:
  * - Blockchain node integration
  * - GPU-accelerated tasks
@@ -17,23 +17,25 @@ use anyhow::{Context, Result};
 use clap::{Arg, Command};
 use std::{path::PathBuf, sync::Arc};
 use tokio::signal;
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
+mod agent;
+mod ai;
+mod bridge;
 mod config;
 mod gpu;
 mod metrics;
 mod node;
-mod bridge;
-mod agent;
 mod nvcore;
+mod orchestrator;
 mod web5;
 
+use agent::NvAgent;
+use bridge::GhostBridge;
 use config::JarvisNvConfig;
 use gpu::GpuManager;
 use metrics::MetricsCollector;
 use node::NodeManager;
-use bridge::GhostBridge;
-use agent::NvAgent;
 
 /// Main JARVIS-NV application state
 pub struct JarvisNv {
@@ -52,31 +54,34 @@ impl JarvisNv {
 
         // Load configuration
         let config = Arc::new(
-            JarvisNvConfig::load(config_path.as_deref()).await
-                .context("Failed to load configuration")?
+            JarvisNvConfig::load(config_path.as_deref())
+                .await
+                .context("Failed to load configuration")?,
         );
 
         // Initialize GPU manager
         let gpu_manager = Arc::new(
-            GpuManager::new(&config.gpu).await
-                .context("Failed to initialize GPU manager")?
+            GpuManager::new(&config.gpu)
+                .await
+                .context("Failed to initialize GPU manager")?,
         );
 
         // Initialize metrics collector
-        let metrics_collector = Arc::new(
-            MetricsCollector::new(&config.metrics, gpu_manager.clone()).await?
-        );
+        let metrics_collector =
+            Arc::new(MetricsCollector::new(&config.metrics, gpu_manager.clone()).await?);
 
         // Initialize node manager (GhostChain/ZVM integration)
         let node_manager = Arc::new(
-            NodeManager::new(&config.node, &config.web5).await
-                .context("Failed to initialize node manager")?
+            NodeManager::new(&config.node, &config.web5)
+                .await
+                .context("Failed to initialize node manager")?,
         );
 
         // Initialize GhostBridge (gRPC/QUIC communication)
         let ghost_bridge = Arc::new(
-            GhostBridge::new(&config.bridge, &config.web5).await
-                .context("Failed to initialize GhostBridge")?
+            GhostBridge::new(&config.bridge, &config.web5)
+                .await
+                .context("Failed to initialize GhostBridge")?,
         );
 
         // Initialize AI agent
@@ -87,7 +92,9 @@ impl JarvisNv {
                 metrics_collector.clone(),
                 node_manager.clone(),
                 ghost_bridge.clone(),
-            ).await.context("Failed to initialize NV Agent")?
+            )
+            .await
+            .context("Failed to initialize NV Agent")?,
         );
 
         Ok(Self {
@@ -105,23 +112,33 @@ impl JarvisNv {
         info!("🧠 Starting JARVIS-NV services...");
 
         // Start GPU manager
-        self.gpu_manager.start().await
+        self.gpu_manager
+            .start()
+            .await
             .context("Failed to start GPU manager")?;
 
         // Start metrics collection
-        self.metrics_collector.start().await
+        self.metrics_collector
+            .start()
+            .await
             .context("Failed to start metrics collector")?;
 
         // Start node monitoring
-        self.node_manager.start().await
+        self.node_manager
+            .start()
+            .await
             .context("Failed to start node manager")?;
 
         // Start GhostBridge communication
-        self.ghost_bridge.start().await
+        self.ghost_bridge
+            .start()
+            .await
             .context("Failed to start GhostBridge")?;
 
         // Start AI agent
-        self.agent.start().await
+        self.agent
+            .start()
+            .await
             .context("Failed to start NV Agent")?;
 
         info!("✅ JARVIS-NV services started successfully");
@@ -210,7 +227,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "jarvis_nv=info,jarvis_core=info".to_string())
+                .unwrap_or_else(|_| "jarvis_nv=info,jarvis_core=info".to_string()),
         )
         .init();
 
@@ -223,7 +240,7 @@ async fn main() -> Result<()> {
                 .short('c')
                 .long("config")
                 .value_name("FILE")
-                .help("Configuration file path")
+                .help("Configuration file path"),
         )
         .arg(
             Arg::new("gpu")
@@ -231,7 +248,7 @@ async fn main() -> Result<()> {
                 .long("gpu")
                 .value_name("ID")
                 .help("GPU device ID to use (default: 0)")
-                .default_value("0")
+                .default_value("0"),
         )
         .arg(
             Arg::new("node-url")
@@ -239,28 +256,13 @@ async fn main() -> Result<()> {
                 .long("node-url")
                 .value_name("URL")
                 .help("GhostChain node URL")
-                .default_value("http://localhost:8545")
+                .default_value("http://localhost:8545"),
         )
-        .subcommand(
-            Command::new("start")
-                .about("Start JARVIS-NV daemon")
-        )
-        .subcommand(
-            Command::new("status")
-                .about("Show system status")
-        )
-        .subcommand(
-            Command::new("gpu-info")
-                .about("Show GPU information")
-        )
-        .subcommand(
-            Command::new("node-info")
-                .about("Show node information")
-        )
-        .subcommand(
-            Command::new("benchmark")
-                .about("Run GPU benchmark")
-        )
+        .subcommand(Command::new("start").about("Start JARVIS-NV daemon"))
+        .subcommand(Command::new("status").about("Show system status"))
+        .subcommand(Command::new("gpu-info").about("Show GPU information"))
+        .subcommand(Command::new("node-info").about("Show node information"))
+        .subcommand(Command::new("benchmark").about("Run GPU benchmark"))
         .get_matches();
 
     let config_path = matches.get_one::<String>("config").map(PathBuf::from);

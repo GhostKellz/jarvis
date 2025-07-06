@@ -1,7 +1,7 @@
 use anyhow::Result;
+use dirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use dirs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -276,25 +276,25 @@ impl Config {
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        
+
         let content = toml::to_string_pretty(self)?;
         tokio::fs::write(path, content).await?;
         Ok(())
     }
 
     pub async fn init() -> Result<()> {
-        let config_dir = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
         let config_path = config_dir.join("jarvis").join("jarvis.toml");
-        
+
         let config = Config::default();
         config.save(&config_path).await?;
-        
+
         // Also create other directories
         let data_dir = dirs::data_local_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not find data directory"))?;
         tokio::fs::create_dir_all(data_dir.join("jarvis")).await?;
-        
+
         Ok(())
     }
 

@@ -66,7 +66,7 @@ impl Default for MonitoringConfig {
     fn default() -> Self {
         Self {
             check_interval: Duration::from_secs(30),
-            latency_threshold: 100.0, // 100ms
+            latency_threshold: 100.0,   // 100ms
             throughput_threshold: 10.0, // 10 Mbps minimum
             packet_loss_threshold: 1.0, // 1% packet loss
             enable_ai_analysis: true,
@@ -103,15 +103,15 @@ impl BlockchainMonitorAgent {
     /// Start continuous monitoring
     pub async fn start_monitoring(&mut self) -> Result<()> {
         info!("Starting blockchain monitoring agent");
-        
+
         // Establish baseline metrics first
         self.establish_baseline().await?;
-        
+
         let mut interval = interval(self.config.check_interval);
-        
+
         loop {
             interval.tick().await;
-            
+
             if let Err(e) = self.perform_monitoring_cycle().await {
                 error!("Monitoring cycle failed: {}", e);
                 // Continue monitoring even if one cycle fails
@@ -122,7 +122,7 @@ impl BlockchainMonitorAgent {
     /// Establish baseline metrics for comparison
     async fn establish_baseline(&mut self) -> Result<()> {
         info!("Establishing baseline metrics...");
-        
+
         // Collect metrics over several samples to establish baseline
         let mut samples = Vec::new();
         for _ in 0..10 {
@@ -134,20 +134,30 @@ impl BlockchainMonitorAgent {
         }
 
         if samples.is_empty() {
-            return Err(anyhow::anyhow!("Could not establish baseline - no metrics collected"));
+            return Err(anyhow::anyhow!(
+                "Could not establish baseline - no metrics collected"
+            ));
         }
 
         let baseline = BaselineMetrics {
             avg_latency: samples.iter().map(|m| m.latency_ms).sum::<f64>() / samples.len() as f64,
-            avg_throughput: samples.iter().map(|m| m.throughput_mbps).sum::<f64>() / samples.len() as f64,
-            normal_peer_count: (samples.iter().map(|m| m.peer_count as f64).sum::<f64>() / samples.len() as f64) as u32,
-            normal_packet_loss: samples.iter().map(|m| m.packet_loss_rate).sum::<f64>() / samples.len() as f64,
+            avg_throughput: samples.iter().map(|m| m.throughput_mbps).sum::<f64>()
+                / samples.len() as f64,
+            normal_peer_count: (samples.iter().map(|m| m.peer_count as f64).sum::<f64>()
+                / samples.len() as f64) as u32,
+            normal_packet_loss: samples.iter().map(|m| m.packet_loss_rate).sum::<f64>()
+                / samples.len() as f64,
             updated_at: Utc::now(),
         };
 
-        info!("Baseline established: Latency={:.2}ms, Throughput={:.2}Mbps, Peers={}, PacketLoss={:.2}%", 
-              baseline.avg_latency, baseline.avg_throughput, baseline.normal_peer_count, baseline.normal_packet_loss);
-        
+        info!(
+            "Baseline established: Latency={:.2}ms, Throughput={:.2}Mbps, Peers={}, PacketLoss={:.2}%",
+            baseline.avg_latency,
+            baseline.avg_throughput,
+            baseline.normal_peer_count,
+            baseline.normal_packet_loss
+        );
+
         self.baseline_metrics = Some(baseline);
         Ok(())
     }
@@ -155,12 +165,15 @@ impl BlockchainMonitorAgent {
     /// Perform one monitoring cycle
     async fn perform_monitoring_cycle(&mut self) -> Result<()> {
         // Get current network metrics
-        let metrics = self.client.get_network_metrics().await
+        let metrics = self
+            .client
+            .get_network_metrics()
+            .await
             .context("Failed to fetch network metrics")?;
 
         // Check for alerts
         let alerts = self.analyze_metrics(&metrics).await?;
-        
+
         // Process any alerts
         for alert in alerts {
             self.handle_alert(alert).await?;
@@ -173,7 +186,10 @@ impl BlockchainMonitorAgent {
     }
 
     /// Analyze metrics and generate alerts
-    async fn analyze_metrics(&self, metrics: &jarvis_core::grpc_client::ghostchain::network::NetworkMetrics) -> Result<Vec<MonitoringAlert>> {
+    async fn analyze_metrics(
+        &self,
+        metrics: &jarvis_core::grpc_client::ghostchain::network::NetworkMetrics,
+    ) -> Result<Vec<MonitoringAlert>> {
         let mut alerts = Vec::new();
 
         if let Some(baseline) = &self.baseline_metrics {
@@ -184,8 +200,10 @@ impl BlockchainMonitorAgent {
                     timestamp: Utc::now(),
                     alert_type: AlertType::PerformanceDegradation,
                     severity: AlertSeverity::Warning,
-                    message: format!("High latency detected: {:.2}ms (threshold: {:.2}ms)", 
-                                   metrics.latency_ms, self.config.latency_threshold),
+                    message: format!(
+                        "High latency detected: {:.2}ms (threshold: {:.2}ms)",
+                        metrics.latency_ms, self.config.latency_threshold
+                    ),
                     network: "GhostChain".to_string(),
                     metadata: [("latency_ms".to_string(), metrics.latency_ms.to_string())].into(),
                 });
@@ -198,10 +216,16 @@ impl BlockchainMonitorAgent {
                     timestamp: Utc::now(),
                     alert_type: AlertType::PerformanceDegradation,
                     severity: AlertSeverity::Warning,
-                    message: format!("Low throughput: {:.2}Mbps (threshold: {:.2}Mbps)", 
-                                   metrics.throughput_mbps, self.config.throughput_threshold),
+                    message: format!(
+                        "Low throughput: {:.2}Mbps (threshold: {:.2}Mbps)",
+                        metrics.throughput_mbps, self.config.throughput_threshold
+                    ),
                     network: "GhostChain".to_string(),
-                    metadata: [("throughput_mbps".to_string(), metrics.throughput_mbps.to_string())].into(),
+                    metadata: [(
+                        "throughput_mbps".to_string(),
+                        metrics.throughput_mbps.to_string(),
+                    )]
+                    .into(),
                 });
             }
 
@@ -211,11 +235,21 @@ impl BlockchainMonitorAgent {
                     id: uuid::Uuid::new_v4().to_string(),
                     timestamp: Utc::now(),
                     alert_type: AlertType::NetworkCongestion,
-                    severity: if metrics.packet_loss_rate > 5.0 { AlertSeverity::Critical } else { AlertSeverity::Warning },
-                    message: format!("High packet loss: {:.2}% (threshold: {:.2}%)", 
-                                   metrics.packet_loss_rate, self.config.packet_loss_threshold),
+                    severity: if metrics.packet_loss_rate > 5.0 {
+                        AlertSeverity::Critical
+                    } else {
+                        AlertSeverity::Warning
+                    },
+                    message: format!(
+                        "High packet loss: {:.2}% (threshold: {:.2}%)",
+                        metrics.packet_loss_rate, self.config.packet_loss_threshold
+                    ),
                     network: "GhostChain".to_string(),
-                    metadata: [("packet_loss_rate".to_string(), metrics.packet_loss_rate.to_string())].into(),
+                    metadata: [(
+                        "packet_loss_rate".to_string(),
+                        metrics.packet_loss_rate.to_string(),
+                    )]
+                    .into(),
                 });
             }
 
@@ -226,7 +260,10 @@ impl BlockchainMonitorAgent {
                     timestamp: Utc::now(),
                     alert_type: AlertType::NetworkCongestion,
                     severity: AlertSeverity::Critical,
-                    message: format!("Low peer count: {} (normal: {})", metrics.peer_count, baseline.normal_peer_count),
+                    message: format!(
+                        "Low peer count: {} (normal: {})",
+                        metrics.peer_count, baseline.normal_peer_count
+                    ),
                     network: "GhostChain".to_string(),
                     metadata: [("peer_count".to_string(), metrics.peer_count.to_string())].into(),
                 });
@@ -241,7 +278,12 @@ impl BlockchainMonitorAgent {
         info!("Alert generated: {} - {}", alert.alert_type, alert.message);
 
         // Store alert in memory
-        self.memory.store_document(&format!("alert:{}", alert.id), &serde_json::to_string(&alert)?).await?;
+        self.memory
+            .store_document(
+                &format!("alert:{}", alert.id),
+                &serde_json::to_string(&alert)?,
+            )
+            .await?;
 
         // If AI analysis is enabled, analyze the alert
         if self.config.enable_ai_analysis {
@@ -272,22 +314,25 @@ impl BlockchainMonitorAgent {
     async fn ai_analyze_alert(&self, alert: &MonitoringAlert) -> Result<()> {
         // This would integrate with Ollama or other LLMs for intelligent analysis
         info!("AI analysis requested for alert: {}", alert.id);
-        
+
         // Placeholder for AI integration
         // In the real implementation, this would:
         // 1. Send alert context to AI model
         // 2. Get recommendations and analysis
         // 3. Store AI insights
         // 4. Suggest automated actions
-        
+
         Ok(())
     }
 
     /// Store current metrics in memory
-    async fn store_metrics(&mut self, metrics: &jarvis_core::grpc_client::ghostchain::network::NetworkMetrics) -> Result<()> {
+    async fn store_metrics(
+        &mut self,
+        metrics: &jarvis_core::grpc_client::ghostchain::network::NetworkMetrics,
+    ) -> Result<()> {
         let timestamp = Utc::now().timestamp();
         let key = format!("metrics:{}", timestamp);
-        
+
         // Create a simplified JSON representation of metrics
         let data = serde_json::json!({
             "latency_ms": metrics.latency_ms,
@@ -297,13 +342,13 @@ impl BlockchainMonitorAgent {
             "active_connections": metrics.active_connections,
             "timestamp": timestamp
         });
-        
+
         self.memory.store_document(&key, &data.to_string()).await?;
-        
+
         // Clean up old metrics (keep last 24 hours)
         let cutoff = timestamp - (24 * 60 * 60);
         // In a real implementation, we'd query and delete old entries
-        
+
         Ok(())
     }
 
@@ -320,11 +365,15 @@ impl BlockchainMonitorAgent {
 
         if let Some(baseline) = &self.baseline_metrics {
             // Analyze recent trends and provide recommendations
-            recommendations.push("Consider implementing transaction batching for efficiency".to_string());
-            recommendations.push("Monitor gas price trends for optimal transaction timing".to_string());
-            
-            if baseline.avg_latency > 50.0 { // > 50ms average latency
-                recommendations.push("High latency detected - consider network optimization".to_string());
+            recommendations
+                .push("Consider implementing transaction batching for efficiency".to_string());
+            recommendations
+                .push("Monitor gas price trends for optimal transaction timing".to_string());
+
+            if baseline.avg_latency > 50.0 {
+                // > 50ms average latency
+                recommendations
+                    .push("High latency detected - consider network optimization".to_string());
             }
         }
 

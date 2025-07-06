@@ -1,7 +1,7 @@
-use anyhow::Result;
-use tower_lsp::lsp_types::*;
-use std::sync::Arc;
 use crate::ai_integration::AIIntegration;
+use anyhow::Result;
+use std::sync::Arc;
+use tower_lsp::lsp_types::*;
 
 pub struct CodeActions {
     ai: Arc<AIIntegration>,
@@ -12,7 +12,10 @@ impl CodeActions {
         Self { ai }
     }
 
-    pub async fn get_code_actions(&self, params: &CodeActionParams) -> Result<Vec<CodeActionOrCommand>> {
+    pub async fn get_code_actions(
+        &self,
+        params: &CodeActionParams,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         // Get text document content
@@ -24,7 +27,10 @@ impl CodeActions {
 
         // Diagnostic-specific actions
         if !params.context.diagnostics.is_empty() {
-            actions.extend(self.get_diagnostic_actions(uri, range, &params.context.diagnostics).await?);
+            actions.extend(
+                self.get_diagnostic_actions(uri, range, &params.context.diagnostics)
+                    .await?,
+            );
         }
 
         // Context-specific actions based on selection
@@ -33,7 +39,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_basic_actions(&self, uri: &Url, range: &Range) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_basic_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         // Explain code action
@@ -134,7 +144,12 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_diagnostic_actions(&self, uri: &Url, range: &Range, diagnostics: &[Diagnostic]) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_diagnostic_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+        diagnostics: &[Diagnostic],
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         if !diagnostics.is_empty() {
@@ -182,7 +197,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_context_actions(&self, uri: &Url, range: &Range) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_context_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         // Get file extension to determine language-specific actions
@@ -253,7 +272,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_python_actions(&self, uri: &Url, range: &Range) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_python_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         actions.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -277,7 +300,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_javascript_actions(&self, uri: &Url, range: &Range) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_javascript_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         actions.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -325,7 +352,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    async fn get_generic_actions(&self, uri: &Url, range: &Range) -> Result<Vec<CodeActionOrCommand>> {
+    async fn get_generic_actions(
+        &self,
+        uri: &Url,
+        range: &Range,
+    ) -> Result<Vec<CodeActionOrCommand>> {
         let mut actions = Vec::new();
 
         actions.push(CodeActionOrCommand::CodeAction(CodeAction {
@@ -349,7 +380,11 @@ impl CodeActions {
         Ok(actions)
     }
 
-    pub async fn execute_action(&self, command: &str, args: &[serde_json::Value]) -> Result<Option<WorkspaceEdit>> {
+    pub async fn execute_action(
+        &self,
+        command: &str,
+        args: &[serde_json::Value],
+    ) -> Result<Option<WorkspaceEdit>> {
         match command {
             "jarvis.explain" => {
                 // This would show explanation in a floating window
@@ -380,7 +415,10 @@ impl CodeActions {
         }
     }
 
-    async fn generate_improvements(&self, _args: &[serde_json::Value]) -> Result<Option<WorkspaceEdit>> {
+    async fn generate_improvements(
+        &self,
+        _args: &[serde_json::Value],
+    ) -> Result<Option<WorkspaceEdit>> {
         // TODO: Implement actual improvement generation
         Ok(None)
     }

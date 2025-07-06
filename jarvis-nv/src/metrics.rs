@@ -1,21 +1,21 @@
 /*!
  * Metrics Collection and Export for JARVIS-NV
- * 
+ *
  * Handles Prometheus metrics, performance monitoring, and health checks
  * for GPU, node, network, and agent operations.
  */
 
 use anyhow::{Context, Result};
 use prometheus::{
-    Counter, Gauge, Histogram, Registry, TextEncoder, Encoder,
-    HistogramOpts, Opts, CounterVec, GaugeVec, HistogramVec,
+    Counter, CounterVec, Encoder, Gauge, GaugeVec, Histogram, HistogramOpts, HistogramVec, Opts,
+    Registry, TextEncoder,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 use warp::{Filter, Reply};
 
 use crate::config::MetricsConfig;
@@ -77,14 +77,14 @@ pub struct MetricsCollector {
     config: MetricsConfig,
     registry: Registry,
     gpu_manager: Arc<GpuManager>,
-    
+
     // Prometheus metrics
     system_metrics: SystemPrometheusMetrics,
     gpu_metrics: GpuPrometheusMetrics,
     agent_metrics: AgentPrometheusMetrics,
     node_metrics: NodePrometheusMetrics,
     network_metrics: NetworkPrometheusMetrics,
-    
+
     // Internal state
     start_time: Instant,
     metrics_history: Arc<Mutex<Vec<serde_json::Value>>>,
@@ -177,7 +177,7 @@ impl MetricsCollector {
     /// Start metrics collection
     pub async fn start(self: &Arc<Self>) -> Result<()> {
         info!("🚀 Starting Metrics Collector...");
-        
+
         *self.is_running.write().await = true;
 
         // Start metrics collection task
@@ -200,7 +200,7 @@ impl MetricsCollector {
     /// Stop metrics collection
     pub async fn stop(&self) -> Result<()> {
         info!("🛑 Stopping Metrics Collector...");
-        
+
         *self.is_running.write().await = false;
 
         info!("✅ Metrics Collector stopped");
@@ -231,7 +231,7 @@ impl MetricsCollector {
     /// Get current system metrics
     pub async fn get_system_metrics(&self) -> Result<SystemMetrics> {
         let uptime = self.start_time.elapsed().as_secs();
-        
+
         // In a real implementation, these would query actual system stats
         Ok(SystemMetrics {
             timestamp: chrono::Utc::now(),
@@ -239,10 +239,10 @@ impl MetricsCollector {
             cpu_usage_percent: 45.2,
             memory_usage_bytes: 8 * 1024 * 1024 * 1024, // 8GB
             memory_total_bytes: 32 * 1024 * 1024 * 1024, // 32GB
-            disk_usage_bytes: 50 * 1024 * 1024 * 1024, // 50GB
+            disk_usage_bytes: 50 * 1024 * 1024 * 1024,  // 50GB
             disk_total_bytes: 1024 * 1024 * 1024 * 1024, // 1TB
-            network_rx_bytes: 1024 * 1024 * 500, // 500MB
-            network_tx_bytes: 1024 * 1024 * 200, // 200MB
+            network_rx_bytes: 1024 * 1024 * 500,        // 500MB
+            network_tx_bytes: 1024 * 1024 * 200,        // 200MB
         })
     }
 
@@ -288,7 +288,7 @@ impl MetricsCollector {
             http3_requests: 5000,
             grpc_requests: 2500,
             bytes_received: 1024 * 1024 * 100, // 100MB
-            bytes_sent: 1024 * 1024 * 50, // 50MB
+            bytes_sent: 1024 * 1024 * 50,      // 50MB
             connection_errors: 5,
             avg_response_time_ms: 85.5,
         })
@@ -309,7 +309,8 @@ impl MetricsCollector {
 
         // Update system metrics
         let system_metrics = self.get_system_metrics().await?;
-        self.update_system_prometheus_metrics(&system_metrics).await?;
+        self.update_system_prometheus_metrics(&system_metrics)
+            .await?;
 
         // Update GPU metrics if available
         if self.config.gpu_metrics {
@@ -333,7 +334,8 @@ impl MetricsCollector {
         // Update network metrics
         if self.config.network_metrics {
             let network_metrics = self.get_network_metrics().await?;
-            self.update_network_prometheus_metrics(&network_metrics).await?;
+            self.update_network_prometheus_metrics(&network_metrics)
+                .await?;
         }
 
         // Store metrics history
@@ -347,7 +349,8 @@ impl MetricsCollector {
         history.push(combined_metrics);
 
         // Keep only recent metrics based on retention policy
-        let max_entries = (self.config.retention_days as u64 * 24 * 60 * 60) / self.config.collection_interval_seconds;
+        let max_entries = (self.config.retention_days as u64 * 24 * 60 * 60)
+            / self.config.collection_interval_seconds;
         if history.len() > max_entries as usize {
             let excess = history.len() - max_entries as usize;
             history.drain(0..excess);
@@ -364,7 +367,7 @@ impl MetricsCollector {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(interval_seconds));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
@@ -382,12 +385,11 @@ impl MetricsCollector {
         let is_running = Arc::clone(&self.is_running);
 
         // Parse endpoint to get bind address and port
-        let url = url::Url::parse(&endpoint)
-            .context("Invalid Prometheus endpoint URL")?;
-        
+        let url = url::Url::parse(&endpoint).context("Invalid Prometheus endpoint URL")?;
+
         let host = url.host_str().unwrap_or("127.0.0.1");
         let port = url.port().unwrap_or(9090);
-        
+
         // Use IPv4 addresses only for now
         let bind_addr = if host == "0.0.0.0" {
             ([0, 0, 0, 0], port)
@@ -398,43 +400,39 @@ impl MetricsCollector {
             ([127, 0, 0, 1], port)
         };
 
-        let metrics_route = warp::path("metrics")
-            .and(warp::get())
-            .map(move || {
-                let encoder = TextEncoder::new();
-                let metric_families = registry.gather();
-                let mut buffer = Vec::new();
-                if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
-                    return warp::reply::with_status(
-                        format!("Error encoding metrics: {}", e),
-                        warp::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    ).into_response();
-                }
-                
-                warp::reply::with_header(
-                    String::from_utf8_lossy(&buffer).to_string(),
-                    "content-type",
-                    "text/plain; charset=utf-8",
-                ).into_response()
-            });
+        let metrics_route = warp::path("metrics").and(warp::get()).map(move || {
+            let encoder = TextEncoder::new();
+            let metric_families = registry.gather();
+            let mut buffer = Vec::new();
+            if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
+                return warp::reply::with_status(
+                    format!("Error encoding metrics: {}", e),
+                    warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+                )
+                .into_response();
+            }
 
-        let health_route = warp::path("health")
-            .and(warp::get())
-            .map(|| {
-                warp::reply::json(&serde_json::json!({
-                    "status": "healthy",
-                    "timestamp": chrono::Utc::now()
-                }))
-            });
+            warp::reply::with_header(
+                String::from_utf8_lossy(&buffer).to_string(),
+                "content-type",
+                "text/plain; charset=utf-8",
+            )
+            .into_response()
+        });
+
+        let health_route = warp::path("health").and(warp::get()).map(|| {
+            warp::reply::json(&serde_json::json!({
+                "status": "healthy",
+                "timestamp": chrono::Utc::now()
+            }))
+        });
 
         let routes = metrics_route.or(health_route);
 
         info!("🌐 Starting Prometheus server on {}:{}", host, port);
 
         let handle = tokio::spawn(async move {
-            warp::serve(routes)
-                .run(bind_addr)
-                .await;
+            warp::serve(routes).run(bind_addr).await;
         });
 
         Ok(handle)
@@ -447,16 +445,22 @@ impl MetricsCollector {
         let metrics_history = Arc::clone(&self.metrics_history);
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(export_config.flush_interval_seconds));
-            
+            let mut interval =
+                tokio::time::interval(Duration::from_secs(export_config.flush_interval_seconds));
+
             while *is_running.read().await {
                 interval.tick().await;
 
                 let history = metrics_history.lock().await;
                 if history.len() >= export_config.batch_size as usize {
                     // Export metrics batch
-                    let batch: Vec<_> = history.iter().rev().take(export_config.batch_size as usize).cloned().collect();
-                    
+                    let batch: Vec<_> = history
+                        .iter()
+                        .rev()
+                        .take(export_config.batch_size as usize)
+                        .cloned()
+                        .collect();
+
                     match export_config.format.as_str() {
                         "prometheus" => {
                             debug!("📤 Exporting {} metrics to Prometheus", batch.len());
@@ -481,12 +485,22 @@ impl MetricsCollector {
 
     /// Update system Prometheus metrics
     async fn update_system_prometheus_metrics(&self, metrics: &SystemMetrics) -> Result<()> {
-        self.system_metrics.uptime.set(metrics.uptime_seconds as f64);
+        self.system_metrics
+            .uptime
+            .set(metrics.uptime_seconds as f64);
         self.system_metrics.cpu_usage.set(metrics.cpu_usage_percent);
-        self.system_metrics.memory_usage.set(metrics.memory_usage_bytes as f64);
-        self.system_metrics.memory_total.set(metrics.memory_total_bytes as f64);
-        self.system_metrics.disk_usage.set(metrics.disk_usage_bytes as f64);
-        self.system_metrics.disk_total.set(metrics.disk_total_bytes as f64);
+        self.system_metrics
+            .memory_usage
+            .set(metrics.memory_usage_bytes as f64);
+        self.system_metrics
+            .memory_total
+            .set(metrics.memory_total_bytes as f64);
+        self.system_metrics
+            .disk_usage
+            .set(metrics.disk_usage_bytes as f64);
+        self.system_metrics
+            .disk_total
+            .set(metrics.disk_total_bytes as f64);
         Ok(())
     }
 
@@ -494,22 +508,34 @@ impl MetricsCollector {
     async fn update_gpu_prometheus_metrics(&self, gpu_status: &serde_json::Value) -> Result<()> {
         if let Some(gpu_info) = gpu_status.get("gpu_info") {
             if let Some(utilization_gpu) = gpu_info.get("utilization_gpu") {
-                self.gpu_metrics.utilization_gpu.set(utilization_gpu.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .utilization_gpu
+                    .set(utilization_gpu.as_f64().unwrap_or(0.0));
             }
             if let Some(utilization_memory) = gpu_info.get("utilization_memory") {
-                self.gpu_metrics.utilization_memory.set(utilization_memory.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .utilization_memory
+                    .set(utilization_memory.as_f64().unwrap_or(0.0));
             }
             if let Some(memory_used) = gpu_info.get("memory_used") {
-                self.gpu_metrics.memory_used.set(memory_used.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .memory_used
+                    .set(memory_used.as_f64().unwrap_or(0.0));
             }
             if let Some(memory_free) = gpu_info.get("memory_free") {
-                self.gpu_metrics.memory_free.set(memory_free.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .memory_free
+                    .set(memory_free.as_f64().unwrap_or(0.0));
             }
             if let Some(temperature) = gpu_info.get("temperature") {
-                self.gpu_metrics.temperature.set(temperature.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .temperature
+                    .set(temperature.as_f64().unwrap_or(0.0));
             }
             if let Some(power_draw) = gpu_info.get("power_draw") {
-                self.gpu_metrics.power_draw.set(power_draw.as_f64().unwrap_or(0.0));
+                self.gpu_metrics
+                    .power_draw
+                    .set(power_draw.as_f64().unwrap_or(0.0));
             }
         }
         Ok(())
@@ -517,27 +543,49 @@ impl MetricsCollector {
 
     /// Update agent Prometheus metrics
     async fn update_agent_prometheus_metrics(&self, metrics: &AgentMetrics) -> Result<()> {
-        self.agent_metrics.models_loaded.set(metrics.models_loaded as f64);
-        self.agent_metrics.inference_duration.observe(metrics.avg_inference_time_ms / 1000.0);
+        self.agent_metrics
+            .models_loaded
+            .set(metrics.models_loaded as f64);
+        self.agent_metrics
+            .inference_duration
+            .observe(metrics.avg_inference_time_ms / 1000.0);
         Ok(())
     }
 
     /// Update node Prometheus metrics
     async fn update_node_prometheus_metrics(&self, metrics: &NodeMetrics) -> Result<()> {
-        self.node_metrics.block_height.set(metrics.block_height as f64);
+        self.node_metrics
+            .block_height
+            .set(metrics.block_height as f64);
         self.node_metrics.peer_count.set(metrics.peer_count as f64);
-        self.node_metrics.mempool_size.set(metrics.mempool_size as f64);
+        self.node_metrics
+            .mempool_size
+            .set(metrics.mempool_size as f64);
         self.node_metrics.sync_progress.set(metrics.sync_progress);
-        self.node_metrics.block_time.observe(metrics.avg_block_time_seconds);
-        self.node_metrics.node_up.set(if metrics.node_status == "synced" { 1.0 } else { 0.0 });
+        self.node_metrics
+            .block_time
+            .observe(metrics.avg_block_time_seconds);
+        self.node_metrics
+            .node_up
+            .set(if metrics.node_status == "synced" {
+                1.0
+            } else {
+                0.0
+            });
         Ok(())
     }
 
     /// Update network Prometheus metrics
     async fn update_network_prometheus_metrics(&self, metrics: &NetworkMetrics) -> Result<()> {
-        self.network_metrics.active_connections.set(metrics.active_connections as f64);
-        self.network_metrics.quic_connections.set(metrics.quic_connections as f64);
-        self.network_metrics.response_time.observe(metrics.avg_response_time_ms / 1000.0);
+        self.network_metrics
+            .active_connections
+            .set(metrics.active_connections as f64);
+        self.network_metrics
+            .quic_connections
+            .set(metrics.quic_connections as f64);
+        self.network_metrics
+            .response_time
+            .observe(metrics.avg_response_time_ms / 1000.0);
         Ok(())
     }
 }
@@ -552,7 +600,10 @@ impl SystemPrometheusMetrics {
         let disk_usage = Gauge::new("system_disk_usage_bytes", "Disk usage in bytes")?;
         let disk_total = Gauge::new("system_disk_total_bytes", "Total disk space in bytes")?;
         let network_rx = Counter::new("system_network_received_bytes", "Network bytes received")?;
-        let network_tx = Counter::new("system_network_transmitted_bytes", "Network bytes transmitted")?;
+        let network_tx = Counter::new(
+            "system_network_transmitted_bytes",
+            "Network bytes transmitted",
+        )?;
 
         registry.register(Box::new(uptime.clone()))?;
         registry.register(Box::new(cpu_usage.clone()))?;
@@ -579,12 +630,18 @@ impl SystemPrometheusMetrics {
 impl GpuPrometheusMetrics {
     fn new(registry: &Registry) -> Result<Self> {
         let utilization_gpu = Gauge::new("gpu_utilization_percent", "GPU utilization percentage")?;
-        let utilization_memory = Gauge::new("gpu_memory_utilization_percent", "GPU memory utilization percentage")?;
+        let utilization_memory = Gauge::new(
+            "gpu_memory_utilization_percent",
+            "GPU memory utilization percentage",
+        )?;
         let memory_used = Gauge::new("gpu_memory_used_bytes", "GPU memory used in bytes")?;
         let memory_free = Gauge::new("gpu_memory_free_bytes", "GPU memory free in bytes")?;
         let temperature = Gauge::new("gpu_temperature_celsius", "GPU temperature in Celsius")?;
         let power_draw = Gauge::new("gpu_power_draw_watts", "GPU power draw in watts")?;
-        let inference_rate = Gauge::new("gpu_inference_rate_per_second", "GPU inference rate per second")?;
+        let inference_rate = Gauge::new(
+            "gpu_inference_rate_per_second",
+            "GPU inference rate per second",
+        )?;
         let models_loaded = Gauge::new("gpu_models_loaded", "Number of models loaded on GPU")?;
 
         registry.register(Box::new(utilization_gpu.clone()))?;
@@ -611,15 +668,25 @@ impl GpuPrometheusMetrics {
 
 impl AgentPrometheusMetrics {
     fn new(registry: &Registry) -> Result<Self> {
-        let inferences_total = Counter::new("agent_inferences_total", "Total number of inferences")?;
-        let inferences_success = Counter::new("agent_inferences_success_total", "Total successful inferences")?;
-        let inferences_failed = Counter::new("agent_inferences_failed_total", "Total failed inferences")?;
-        let inference_duration = Histogram::with_opts(
-            HistogramOpts::new("agent_inference_duration_seconds", "Inference duration in seconds")
+        let inferences_total =
+            Counter::new("agent_inferences_total", "Total number of inferences")?;
+        let inferences_success = Counter::new(
+            "agent_inferences_success_total",
+            "Total successful inferences",
         )?;
+        let inferences_failed =
+            Counter::new("agent_inferences_failed_total", "Total failed inferences")?;
+        let inference_duration = Histogram::with_opts(HistogramOpts::new(
+            "agent_inference_duration_seconds",
+            "Inference duration in seconds",
+        ))?;
         let models_loaded = Gauge::new("agent_models_loaded", "Number of models loaded")?;
-        let anomalies_detected = Counter::new("agent_anomalies_detected_total", "Total anomalies detected")?;
-        let optimizations_applied = Counter::new("agent_optimizations_applied_total", "Total optimizations applied")?;
+        let anomalies_detected =
+            Counter::new("agent_anomalies_detected_total", "Total anomalies detected")?;
+        let optimizations_applied = Counter::new(
+            "agent_optimizations_applied_total",
+            "Total optimizations applied",
+        )?;
         let security_alerts = Counter::new("agent_security_alerts_total", "Total security alerts")?;
 
         registry.register(Box::new(inferences_total.clone()))?;
@@ -649,11 +716,16 @@ impl NodePrometheusMetrics {
         let block_height = Gauge::new("node_block_height", "Current block height")?;
         let peer_count = Gauge::new("node_peer_count", "Number of connected peers")?;
         let mempool_size = Gauge::new("node_mempool_size", "Number of transactions in mempool")?;
-        let sync_progress = Gauge::new("node_sync_progress_percent", "Node sync progress percentage")?;
-        let transaction_count = Counter::new("node_transactions_total", "Total number of transactions")?;
-        let block_time = Histogram::with_opts(
-            HistogramOpts::new("node_block_time_seconds", "Block time in seconds")
+        let sync_progress = Gauge::new(
+            "node_sync_progress_percent",
+            "Node sync progress percentage",
         )?;
+        let transaction_count =
+            Counter::new("node_transactions_total", "Total number of transactions")?;
+        let block_time = Histogram::with_opts(HistogramOpts::new(
+            "node_block_time_seconds",
+            "Block time in seconds",
+        ))?;
         let node_up = Gauge::new("node_up", "Node status (1 = up, 0 = down)")?;
 
         registry.register(Box::new(block_height.clone()))?;
@@ -678,16 +750,20 @@ impl NodePrometheusMetrics {
 
 impl NetworkPrometheusMetrics {
     fn new(registry: &Registry) -> Result<Self> {
-        let active_connections = Gauge::new("network_active_connections", "Number of active connections")?;
-        let quic_connections = Gauge::new("network_quic_connections", "Number of QUIC connections")?;
+        let active_connections =
+            Gauge::new("network_active_connections", "Number of active connections")?;
+        let quic_connections =
+            Gauge::new("network_quic_connections", "Number of QUIC connections")?;
         let http3_requests = Counter::new("network_http3_requests_total", "Total HTTP/3 requests")?;
         let grpc_requests = Counter::new("network_grpc_requests_total", "Total gRPC requests")?;
         let bytes_received = Counter::new("network_bytes_received_total", "Total bytes received")?;
         let bytes_sent = Counter::new("network_bytes_sent_total", "Total bytes sent")?;
-        let connection_errors = Counter::new("network_connection_errors_total", "Total connection errors")?;
-        let response_time = Histogram::with_opts(
-            HistogramOpts::new("network_response_time_seconds", "Response time in seconds")
-        )?;
+        let connection_errors =
+            Counter::new("network_connection_errors_total", "Total connection errors")?;
+        let response_time = Histogram::with_opts(HistogramOpts::new(
+            "network_response_time_seconds",
+            "Response time in seconds",
+        ))?;
 
         registry.register(Box::new(active_connections.clone()))?;
         registry.register(Box::new(quic_connections.clone()))?;

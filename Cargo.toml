@@ -20,7 +20,8 @@ members = [
     "jarvis-core",
     "jarvis-agent", 
     "jarvis-shell",
-    "jarvis-nvim"
+    "jarvis-nvim",
+    "jarvis-nv"
 ]
 
 [dependencies]

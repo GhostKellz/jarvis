@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Impact levels for findings and recommendations
@@ -73,12 +73,12 @@ pub trait BlockchainAgent: Send + Sync {
     /// Agent identification
     fn agent_type(&self) -> AgentType;
     fn description(&self) -> String;
-    
+
     /// Core agent capabilities
     async fn analyze(&self, context: &BlockchainContext) -> Result<AnalysisResult>;
     async fn recommend(&self, analysis: &AnalysisResult) -> Result<Vec<Recommendation>>;
     async fn execute(&self, recommendation: &Recommendation) -> Result<ExecutionResult>;
-    
+
     /// Health and status
     async fn health_check(&self) -> Result<AgentHealth>;
     fn get_metrics(&self) -> AgentMetrics;
@@ -390,46 +390,46 @@ pub struct PerformanceTargets {
 impl BlockchainAgentOrchestrator {
     pub fn new() -> Self {
         let agents: HashMap<AgentType, Box<dyn BlockchainAgent>> = HashMap::new();
-        
+
         // Initialize specialized agents
         // agents.insert(AgentType::NetworkOptimizer, Box::new(NetworkOptimizerAgent::new()));
         // agents.insert(AgentType::SmartContractAuditor, Box::new(ContractAuditorAgent::new()));
         // agents.insert(AgentType::PerformanceMonitor, Box::new(PerformanceMonitorAgent::new()));
         // agents.insert(AgentType::IPv6Optimizer, Box::new(IPv6OptimizerAgent::new()));
         // agents.insert(AgentType::QUICOptimizer, Box::new(QUICOptimizerAgent::new()));
-        
+
         Self {
             agents,
             ghostchain_config: GhostChainConfig::default(),
             zig_blockchain_config: ZigBlockchainConfig::default(),
         }
     }
-    
-    pub async fn orchestrate_optimization(&self, context: &BlockchainContext) -> Result<Vec<Recommendation>> {
+
+    pub async fn orchestrate_optimization(
+        &self,
+        context: &BlockchainContext,
+    ) -> Result<Vec<Recommendation>> {
         let mut all_recommendations = Vec::new();
-        
+
         for (agent_type, agent) in &self.agents {
             match agent.analyze(context).await {
-                Ok(analysis) => {
-                    match agent.recommend(&analysis).await {
-                        Ok(mut recommendations) => all_recommendations.append(&mut recommendations),
-                        Err(e) => eprintln!("Agent {:?} recommendation failed: {}", agent_type, e),
-                    }
+                Ok(analysis) => match agent.recommend(&analysis).await {
+                    Ok(mut recommendations) => all_recommendations.append(&mut recommendations),
+                    Err(e) => eprintln!("Agent {:?} recommendation failed: {}", agent_type, e),
                 },
                 Err(e) => eprintln!("Agent {:?} analysis failed: {}", agent_type, e),
             }
         }
-        
+
         // Sort recommendations by priority and impact
         all_recommendations.sort_by(|a, b| {
-            b.priority.cmp(&a.priority)
-                .then_with(|| {
-                    let a_impact = a.estimated_impact.performance_gain.unwrap_or(0.0);
-                    let b_impact = b.estimated_impact.performance_gain.unwrap_or(0.0);
-                    b_impact.partial_cmp(&a_impact).unwrap()
-                })
+            b.priority.cmp(&a.priority).then_with(|| {
+                let a_impact = a.estimated_impact.performance_gain.unwrap_or(0.0);
+                let b_impact = b.estimated_impact.performance_gain.unwrap_or(0.0);
+                b_impact.partial_cmp(&a_impact).unwrap()
+            })
         });
-        
+
         Ok(all_recommendations)
     }
 }

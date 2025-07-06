@@ -1,8 +1,8 @@
+use crate::types::{AgentTask, Conversation, Message, MessageMetadata, MessageRole};
 use anyhow::Result;
-use sqlx::{Pool, Sqlite, SqlitePool, Row};
-use uuid::Uuid;
 use chrono::Utc;
-use crate::types::{Conversation, Message, MessageRole, MessageMetadata, AgentTask};
+use sqlx::{Pool, Row, Sqlite, SqlitePool};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct MemoryStore {
@@ -13,23 +13,23 @@ impl MemoryStore {
     pub async fn new(database_path: &str) -> Result<Self> {
         let expanded_path = shellexpand::tilde(database_path);
         tracing::debug!("Database path: {} -> {}", database_path, expanded_path);
-        
+
         // Create parent directory if it doesn't exist
         if let Some(parent) = std::path::Path::new(&*expanded_path).parent() {
             tracing::debug!("Creating parent directory: {:?}", parent);
             tokio::fs::create_dir_all(parent).await?;
         }
-        
+
         // Ensure the database file exists by touching it
         if !std::path::Path::new(&*expanded_path).exists() {
             tracing::debug!("Creating database file: {}", expanded_path);
             tokio::fs::write(&*expanded_path, "").await?;
         }
-        
+
         let db_url = format!("sqlite:{}", expanded_path);
         tracing::debug!("Database URL: {}", db_url);
         let pool = SqlitePool::connect(&db_url).await?;
-        
+
         // Initialize the database schema manually for now
         // TODO: Implement proper migrations
         sqlx::query(
@@ -72,20 +72,20 @@ impl MemoryStore {
             CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at);
             CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks (created_at);
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
-            "#
+            "#,
         )
         .execute(&pool)
         .await?;
-        
+
         Ok(Self { pool })
     }
 
     pub async fn create_conversation(&self, title: &str) -> Result<Conversation> {
         let id = Uuid::new_v4();
         let now = Utc::now();
-        
+
         sqlx::query(
-            "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)"
+            "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)",
         )
         .bind(id.to_string())
         .bind(title)
@@ -93,9 +93,9 @@ impl MemoryStore {
         .bind(now.to_rfc3339())
         .execute(&self.pool)
         .await?;
-        
+
         Ok(Conversation {
-            id: id.to_string(),  // Convert to String
+            id: id.to_string(), // Convert to String
             title: title.to_string(),
             created_at: now,
             updated_at: now,
@@ -119,7 +119,7 @@ impl MemoryStore {
             MessageRole::Tool => "tool",
         };
         let metadata_json = serde_json::to_string(&metadata)?;
-        
+
         sqlx::query(
             "INSERT INTO messages (id, conversation_id, role, content, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)"
         )
@@ -131,10 +131,10 @@ impl MemoryStore {
         .bind(now.to_rfc3339())
         .execute(&self.pool)
         .await?;
-        
+
         Ok(Message {
-            id: id.to_string(),  // Convert to String
-            conversation_id: conversation_id.to_string(),  // Convert to String
+            id: id.to_string(),                           // Convert to String
+            conversation_id: conversation_id.to_string(), // Convert to String
             role,
             content: content.to_string(),
             metadata,
@@ -144,20 +144,22 @@ impl MemoryStore {
 
     pub async fn get_conversation(&self, conversation_id: Uuid) -> Result<Option<Conversation>> {
         let conv_row = sqlx::query_as::<_, (String, String, String, String)>(
-            "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?"
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?",
         )
         .bind(conversation_id.to_string())
         .fetch_optional(&self.pool)
         .await?;
-        
+
         if let Some(row) = conv_row {
             let messages = self.get_conversation_messages(conversation_id).await?;
-            
+
             Ok(Some(Conversation {
-                id: row.0,  // Use String directly
+                id: row.0, // Use String directly
                 title: row.1,
-                created_at: chrono::DateTime::parse_from_rfc3339(&row.2)?.with_timezone(&chrono::Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&row.3)?.with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.2)?
+                    .with_timezone(&chrono::Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&row.3)?
+                    .with_timezone(&chrono::Utc),
                 messages,
             }))
         } else {
@@ -172,7 +174,7 @@ impl MemoryStore {
         .bind(conversation_id.to_string())
         .fetch_all(&self.pool)
         .await?;
-        
+
         let mut messages = Vec::new();
         for row in rows {
             let role = match row.1.as_str() {
@@ -183,25 +185,30 @@ impl MemoryStore {
                 _ => MessageRole::User,
             };
             let metadata: MessageMetadata = serde_json::from_str(&row.3)?;
-            
+
             messages.push(Message {
-                id: row.0,  // Use String directly
-                conversation_id: conversation_id.to_string(),  // Convert to String
+                id: row.0,                                    // Use String directly
+                conversation_id: conversation_id.to_string(), // Convert to String
                 role,
                 content: row.2,
                 metadata,
-                created_at: chrono::DateTime::parse_from_rfc3339(&row.4)?.with_timezone(&chrono::Utc),
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.4)?
+                    .with_timezone(&chrono::Utc),
             });
         }
-        
+
         Ok(messages)
     }
 
     pub async fn store_task(&self, task: &AgentTask) -> Result<()> {
         let task_type_str = format!("{:?}", task.task_type);
         let status_str = format!("{:?}", task.status);
-        let result_json = task.result.as_ref().map(|r| serde_json::to_string(r)).transpose()?;
-        
+        let result_json = task
+            .result
+            .as_ref()
+            .map(|r| serde_json::to_string(r))
+            .transpose()?;
+
         sqlx::query(
             "INSERT OR REPLACE INTO tasks (id, task_type, description, status, created_at, completed_at, result) VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
@@ -214,7 +221,7 @@ impl MemoryStore {
         .bind(result_json)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
 
@@ -225,24 +232,26 @@ impl MemoryStore {
         .bind(limit)
         .fetch_all(&self.pool)
         .await?;
-        
+
         let mut tasks = Vec::new();
         for row in rows {
             // This is a simplified version - you'd want proper enum parsing
             tasks.push(AgentTask {
-                id: row.0,  // Use String directly
+                id: row.0,                                  // Use String directly
                 task_type: crate::types::TaskType::Explain, // TODO: Parse properly
                 description: row.2,
                 status: crate::types::TaskStatus::Completed, // TODO: Parse properly
-                created_at: chrono::DateTime::parse_from_rfc3339(&row.4)?.with_timezone(&chrono::Utc),
-                completed_at: row.5
+                created_at: chrono::DateTime::parse_from_rfc3339(&row.4)?
+                    .with_timezone(&chrono::Utc),
+                completed_at: row
+                    .5
                     .map(|dt_str| chrono::DateTime::parse_from_rfc3339(&dt_str))
                     .transpose()?
                     .map(|dt| dt.with_timezone(&chrono::Utc)),
                 result: row.6.map(|r| serde_json::from_str(&r)).transpose()?,
             });
         }
-        
+
         Ok(tasks)
     }
 
@@ -252,25 +261,23 @@ impl MemoryStore {
             r#"
             INSERT OR REPLACE INTO documents (key, data, created_at, updated_at)
             VALUES (?1, ?2, ?3, ?3)
-            "#
+            "#,
         )
         .bind(key)
         .bind(data)
         .bind(Utc::now().to_rfc3339())
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
 
     /// Retrieve a document by key
     pub async fn get_document(&self, key: &str) -> Result<Option<String>> {
-        let row = sqlx::query(
-            "SELECT data FROM documents WHERE key = ?1"
-        )
-        .bind(key)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row = sqlx::query("SELECT data FROM documents WHERE key = ?1")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(row.map(|r| r.get::<String, _>(0)))
     }
@@ -281,7 +288,7 @@ impl MemoryStore {
             .bind(key)
             .execute(&self.pool)
             .await?;
-        
+
         Ok(())
     }
 }

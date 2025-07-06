@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -30,14 +30,14 @@ impl IPv6OptimizerAgent {
             metrics: AgentMetrics::default(),
         }
     }
-    
+
     async fn analyze_ipv6_topology(&self, context: &BlockchainContext) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Analyze IPv6 peer distribution
-        let ipv6_ratio = context.network_topology.ipv6_peers as f64 
-            / context.network_topology.peer_count as f64;
-        
+        let ipv6_ratio =
+            context.network_topology.ipv6_peers as f64 / context.network_topology.peer_count as f64;
+
         if ipv6_ratio < 0.5 {
             findings.push(Finding {
                 category: FindingCategory::NetworkTopology,
@@ -59,19 +59,21 @@ impl IPv6OptimizerAgent {
                 }],
             });
         }
-        
+
         // Check for flow label utilization
         if self.config.optimize_flow_labels {
             findings.push(Finding {
                 category: FindingCategory::Optimization,
                 title: "Flow Label Optimization Available".to_string(),
-                description: "IPv6 flow labels can be optimized for blockchain traffic prioritization".to_string(),
+                description:
+                    "IPv6 flow labels can be optimized for blockchain traffic prioritization"
+                        .to_string(),
                 impact: ImpactLevel::Low,
                 urgency: UrgencyLevel::Low,
                 evidence: vec![],
             });
         }
-        
+
         Ok(findings)
     }
 }
@@ -81,22 +83,28 @@ impl BlockchainAgent for IPv6OptimizerAgent {
     fn agent_type(&self) -> AgentType {
         AgentType::IPv6Optimizer
     }
-    
+
     fn description(&self) -> String {
         "Optimizes blockchain network performance using IPv6 features including multicast discovery, flow labels, and native routing".to_string()
     }
-    
+
     async fn analyze(&self, context: &BlockchainContext) -> Result<AnalysisResult> {
         let findings = self.analyze_ipv6_topology(context).await?;
-        
-        let severity = if findings.iter().any(|f| matches!(f.impact, ImpactLevel::High | ImpactLevel::Critical)) {
+
+        let severity = if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::High | ImpactLevel::Critical))
+        {
             AnalysisSeverity::Critical
-        } else if findings.iter().any(|f| matches!(f.impact, ImpactLevel::Medium)) {
+        } else if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::Medium))
+        {
             AnalysisSeverity::Warning
         } else {
             AnalysisSeverity::Info
         };
-        
+
         Ok(AnalysisResult {
             agent_type: self.agent_type(),
             timestamp: Utc::now(),
@@ -106,10 +114,10 @@ impl BlockchainAgent for IPv6OptimizerAgent {
             metadata: HashMap::new(),
         })
     }
-    
+
     async fn recommend(&self, analysis: &AnalysisResult) -> Result<Vec<Recommendation>> {
         let mut recommendations = Vec::new();
-        
+
         for finding in &analysis.findings {
             match finding.category {
                 FindingCategory::NetworkTopology => {
@@ -170,7 +178,7 @@ impl BlockchainAgent for IPv6OptimizerAgent {
                             }),
                         });
                     }
-                },
+                }
                 FindingCategory::Optimization => {
                     if finding.title.contains("Flow Label Optimization") {
                         recommendations.push(Recommendation {
@@ -205,25 +213,28 @@ impl BlockchainAgent for IPv6OptimizerAgent {
                             rollback_plan: None,
                         });
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
-        
+
         Ok(recommendations)
     }
-    
+
     async fn execute(&self, recommendation: &Recommendation) -> Result<ExecutionResult> {
         let mut logs = Vec::new();
         let started_at = Utc::now();
-        
+
         logs.push(ExecutionLog {
             timestamp: Utc::now(),
             level: LogLevel::Info,
-            message: format!("Starting execution of recommendation: {}", recommendation.title),
+            message: format!(
+                "Starting execution of recommendation: {}",
+                recommendation.title
+            ),
             context: HashMap::new(),
         });
-        
+
         // Simulate execution (in real implementation, this would execute actual commands)
         for step in &recommendation.implementation_steps {
             logs.push(ExecutionLog {
@@ -232,7 +243,7 @@ impl BlockchainAgent for IPv6OptimizerAgent {
                 message: format!("Executing step {}: {}", step.step_number, step.description),
                 context: HashMap::new(),
             });
-            
+
             if let Some(command) = &step.command {
                 logs.push(ExecutionLog {
                     timestamp: Utc::now(),
@@ -242,7 +253,7 @@ impl BlockchainAgent for IPv6OptimizerAgent {
                 });
             }
         }
-        
+
         Ok(ExecutionResult {
             recommendation_id: recommendation.id.clone(),
             status: ExecutionStatus::Completed,
@@ -254,7 +265,7 @@ impl BlockchainAgent for IPv6OptimizerAgent {
             rollback_performed: false,
         })
     }
-    
+
     async fn health_check(&self) -> Result<AgentHealth> {
         Ok(AgentHealth {
             status: HealthStatus::Healthy,
@@ -264,7 +275,7 @@ impl BlockchainAgent for IPv6OptimizerAgent {
             average_response_time: std::time::Duration::from_millis(250),
         })
     }
-    
+
     fn get_metrics(&self) -> AgentMetrics {
         self.metrics.clone()
     }
@@ -293,14 +304,14 @@ impl QUICOptimizerAgent {
             metrics: AgentMetrics::default(),
         }
     }
-    
+
     async fn analyze_quic_performance(&self, context: &BlockchainContext) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Analyze QUIC connection ratio
-        let quic_ratio = context.network_topology.quic_connections as f64 
+        let quic_ratio = context.network_topology.quic_connections as f64
             / context.network_topology.peer_count as f64;
-        
+
         if quic_ratio < 0.8 {
             findings.push(Finding {
                 category: FindingCategory::Performance,
@@ -322,7 +333,7 @@ impl QUICOptimizerAgent {
                 }],
             });
         }
-        
+
         // Check latency performance
         if context.network_topology.average_latency > 100.0 {
             findings.push(Finding {
@@ -339,7 +350,7 @@ impl QUICOptimizerAgent {
                 }],
             });
         }
-        
+
         Ok(findings)
     }
 }
@@ -349,22 +360,28 @@ impl BlockchainAgent for QUICOptimizerAgent {
     fn agent_type(&self) -> AgentType {
         AgentType::QUICOptimizer
     }
-    
+
     fn description(&self) -> String {
         "Optimizes QUIC protocol settings for blockchain networks including congestion control, connection migration, and stream multiplexing".to_string()
     }
-    
+
     async fn analyze(&self, context: &BlockchainContext) -> Result<AnalysisResult> {
         let findings = self.analyze_quic_performance(context).await?;
-        
-        let severity = if findings.iter().any(|f| matches!(f.impact, ImpactLevel::High | ImpactLevel::Critical)) {
+
+        let severity = if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::High | ImpactLevel::Critical))
+        {
             AnalysisSeverity::Critical
-        } else if findings.iter().any(|f| matches!(f.impact, ImpactLevel::Medium)) {
+        } else if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::Medium))
+        {
             AnalysisSeverity::Warning
         } else {
             AnalysisSeverity::Info
         };
-        
+
         Ok(AnalysisResult {
             agent_type: self.agent_type(),
             timestamp: Utc::now(),
@@ -374,10 +391,10 @@ impl BlockchainAgent for QUICOptimizerAgent {
             metadata: HashMap::new(),
         })
     }
-    
+
     async fn recommend(&self, analysis: &AnalysisResult) -> Result<Vec<Recommendation>> {
         let mut recommendations = Vec::new();
-        
+
         for finding in &analysis.findings {
             match finding.category {
                 FindingCategory::Performance => {
@@ -386,7 +403,9 @@ impl BlockchainAgent for QUICOptimizerAgent {
                             id: Uuid::new_v4().to_string(),
                             agent_type: self.agent_type(),
                             title: "Optimize QUIC Connection Settings".to_string(),
-                            description: "Enable advanced QUIC features for better blockchain performance".to_string(),
+                            description:
+                                "Enable advanced QUIC features for better blockchain performance"
+                                    .to_string(),
                             action_type: ActionType::PerformanceTuning,
                             priority: 8,
                             estimated_impact: EstimatedImpact {
@@ -404,30 +423,44 @@ impl BlockchainAgent for QUICOptimizerAgent {
                                 "QUIC library available".to_string(),
                                 "Network supports UDP".to_string(),
                             ],
-                            risks: vec![
-                                "Initial connection overhead during migration".to_string(),
-                            ],
+                            risks: vec!["Initial connection overhead during migration".to_string()],
                             implementation_steps: vec![
                                 ImplementationStep {
                                     step_number: 1,
                                     description: "Enable QUIC connection migration".to_string(),
-                                    command: Some("jarvis config set network.quic.connection_migration true".to_string()),
+                                    command: Some(
+                                        "jarvis config set network.quic.connection_migration true"
+                                            .to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(30),
-                                    validation_criteria: vec!["Connection migration enabled".to_string()],
+                                    validation_criteria: vec![
+                                        "Connection migration enabled".to_string(),
+                                    ],
                                 },
                                 ImplementationStep {
                                     step_number: 2,
-                                    description: "Optimize congestion control algorithm".to_string(),
-                                    command: Some("jarvis config set network.quic.congestion_control BBR".to_string()),
+                                    description: "Optimize congestion control algorithm"
+                                        .to_string(),
+                                    command: Some(
+                                        "jarvis config set network.quic.congestion_control BBR"
+                                            .to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(60),
-                                    validation_criteria: vec!["BBR congestion control active".to_string()],
+                                    validation_criteria: vec![
+                                        "BBR congestion control active".to_string(),
+                                    ],
                                 },
                                 ImplementationStep {
                                     step_number: 3,
-                                    description: "Enable 0-RTT for returning connections".to_string(),
-                                    command: Some("jarvis config set network.quic.zero_rtt true".to_string()),
+                                    description: "Enable 0-RTT for returning connections"
+                                        .to_string(),
+                                    command: Some(
+                                        "jarvis config set network.quic.zero_rtt true".to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(30),
-                                    validation_criteria: vec!["0-RTT connections enabled".to_string()],
+                                    validation_criteria: vec![
+                                        "0-RTT connections enabled".to_string(),
+                                    ],
                                 },
                             ],
                             rollback_plan: Some(RollbackPlan {
@@ -435,26 +468,30 @@ impl BlockchainAgent for QUICOptimizerAgent {
                                     "Connection failure rate > 10%".to_string(),
                                     "Latency increase > 50%".to_string(),
                                 ],
-                                rollback_steps: vec![
-                                    ImplementationStep {
-                                        step_number: 1,
-                                        description: "Revert to TCP connections".to_string(),
-                                        command: Some("jarvis config set network.protocol tcp".to_string()),
-                                        expected_duration: std::time::Duration::from_secs(60),
-                                        validation_criteria: vec!["TCP connections restored".to_string()],
-                                    },
-                                ],
+                                rollback_steps: vec![ImplementationStep {
+                                    step_number: 1,
+                                    description: "Revert to TCP connections".to_string(),
+                                    command: Some(
+                                        "jarvis config set network.protocol tcp".to_string(),
+                                    ),
+                                    expected_duration: std::time::Duration::from_secs(60),
+                                    validation_criteria: vec![
+                                        "TCP connections restored".to_string(),
+                                    ],
+                                }],
                                 recovery_time: std::time::Duration::from_secs(120),
                             }),
                         });
                     }
-                    
+
                     if finding.title.contains("High Network Latency") {
                         recommendations.push(Recommendation {
                             id: Uuid::new_v4().to_string(),
                             agent_type: self.agent_type(),
                             title: "Implement QUIC Packet Pacing Optimization".to_string(),
-                            description: "Optimize packet pacing to reduce network congestion and latency".to_string(),
+                            description:
+                                "Optimize packet pacing to reduce network congestion and latency"
+                                    .to_string(),
                             action_type: ActionType::PerformanceTuning,
                             priority: 9,
                             estimated_impact: EstimatedImpact {
@@ -468,43 +505,42 @@ impl BlockchainAgent for QUICOptimizerAgent {
                                     storage_reduction: 0,
                                 }),
                             },
-                            prerequisites: vec![
-                                "QUIC version 1 or higher".to_string(),
-                            ],
+                            prerequisites: vec!["QUIC version 1 or higher".to_string()],
                             risks: vec![
                                 "May require tuning based on network conditions".to_string(),
                             ],
-                            implementation_steps: vec![
-                                ImplementationStep {
-                                    step_number: 1,
-                                    description: "Enable adaptive packet pacing".to_string(),
-                                    command: Some("jarvis config set network.quic.packet_pacing adaptive".to_string()),
-                                    expected_duration: std::time::Duration::from_secs(30),
-                                    validation_criteria: vec!["Packet pacing enabled".to_string()],
-                                },
-                            ],
+                            implementation_steps: vec![ImplementationStep {
+                                step_number: 1,
+                                description: "Enable adaptive packet pacing".to_string(),
+                                command: Some(
+                                    "jarvis config set network.quic.packet_pacing adaptive"
+                                        .to_string(),
+                                ),
+                                expected_duration: std::time::Duration::from_secs(30),
+                                validation_criteria: vec!["Packet pacing enabled".to_string()],
+                            }],
                             rollback_plan: None,
                         });
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
-        
+
         Ok(recommendations)
     }
-    
+
     async fn execute(&self, recommendation: &Recommendation) -> Result<ExecutionResult> {
         let mut logs = Vec::new();
         let started_at = Utc::now();
-        
+
         logs.push(ExecutionLog {
             timestamp: Utc::now(),
             level: LogLevel::Info,
             message: format!("Starting QUIC optimization: {}", recommendation.title),
             context: HashMap::new(),
         });
-        
+
         // Simulate execution
         for step in &recommendation.implementation_steps {
             logs.push(ExecutionLog {
@@ -514,7 +550,7 @@ impl BlockchainAgent for QUICOptimizerAgent {
                 context: HashMap::new(),
             });
         }
-        
+
         Ok(ExecutionResult {
             recommendation_id: recommendation.id.clone(),
             status: ExecutionStatus::Completed,
@@ -526,7 +562,7 @@ impl BlockchainAgent for QUICOptimizerAgent {
             rollback_performed: false,
         })
     }
-    
+
     async fn health_check(&self) -> Result<AgentHealth> {
         Ok(AgentHealth {
             status: HealthStatus::Healthy,
@@ -536,7 +572,7 @@ impl BlockchainAgent for QUICOptimizerAgent {
             average_response_time: std::time::Duration::from_millis(300),
         })
     }
-    
+
     fn get_metrics(&self) -> AgentMetrics {
         self.metrics.clone()
     }

@@ -1,6 +1,6 @@
 /*!
  * Configuration management for JARVIS-NV
- * 
+ *
  * Handles configuration for GPU acceleration, node integration,
  * Web5 networking, and AI agent settings.
  */
@@ -194,6 +194,16 @@ pub struct AgentConfig {
     pub auto_response: bool,
     pub learning_enabled: bool,
     pub model_updates: bool,
+
+    // AI/LLM Configuration
+    pub ollama_endpoint: Option<String>,
+    pub default_ai_models: Option<Vec<String>>,
+    pub max_context_tokens: Option<u32>,
+    pub inference_timeout_seconds: Option<u64>,
+    pub chat_session_timeout_minutes: Option<u64>,
+    pub ai_temperature: Option<f32>,
+    pub ai_max_tokens: Option<u32>,
+
     pub capabilities: AgentCapabilities,
     pub thresholds: AgentThresholds,
 }
@@ -404,6 +414,16 @@ impl Default for JarvisNvConfig {
                 auto_response: false,
                 learning_enabled: true,
                 model_updates: true,
+
+                // AI/LLM Configuration
+                ollama_endpoint: Some("http://localhost:11434".to_string()),
+                default_ai_models: Some(vec!["llama3.2:3b".to_string(), "qwen2.5:7b".to_string()]),
+                max_context_tokens: Some(4096),
+                inference_timeout_seconds: Some(30),
+                chat_session_timeout_minutes: Some(60),
+                ai_temperature: Some(0.7),
+                ai_max_tokens: Some(1024),
+
                 capabilities: AgentCapabilities {
                     anomaly_detection: true,
                     performance_optimization: true,
@@ -470,24 +490,26 @@ impl JarvisNvConfig {
         let config_path = match path {
             Some(p) => p.to_path_buf(),
             None => {
-                let config_dir = dirs::config_dir()
-                    .context("Could not find config directory")?;
+                let config_dir = dirs::config_dir().context("Could not find config directory")?;
                 config_dir.join("jarvis-nv").join("config.toml")
             }
         };
 
         if config_path.exists() {
-            let content = fs::read_to_string(&config_path).await
+            let content = fs::read_to_string(&config_path)
+                .await
                 .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
-            
+
             let config: Self = toml::from_str(&content)
                 .with_context(|| format!("Failed to parse config file: {:?}", config_path))?;
-            
+
             Ok(config)
         } else {
             // Create default config
             let config = Self::default();
-            config.save(&config_path).await
+            config
+                .save(&config_path)
+                .await
                 .context("Failed to save default config")?;
             Ok(config)
         }
@@ -496,14 +518,15 @@ impl JarvisNvConfig {
     /// Save configuration to file
     pub async fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await
+            fs::create_dir_all(parent)
+                .await
                 .context("Failed to create config directory")?;
         }
 
-        let content = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
-        
-        fs::write(path, content).await
+        let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
+
+        fs::write(path, content)
+            .await
             .with_context(|| format!("Failed to write config file: {:?}", path))?;
 
         Ok(())
@@ -522,10 +545,13 @@ impl JarvisNvConfig {
         }
 
         // Validate agent thresholds
-        if self.agent.thresholds.anomaly_score_threshold < 0.0 || 
-           self.agent.thresholds.anomaly_score_threshold > 1.0 {
-            anyhow::bail!("Invalid anomaly score threshold: {}", 
-                         self.agent.thresholds.anomaly_score_threshold);
+        if self.agent.thresholds.anomaly_score_threshold < 0.0
+            || self.agent.thresholds.anomaly_score_threshold > 1.0
+        {
+            anyhow::bail!(
+                "Invalid anomaly score threshold: {}",
+                self.agent.thresholds.anomaly_score_threshold
+            );
         }
 
         Ok(())

@@ -1,9 +1,9 @@
+use crate::ai_integration::AIIntegration;
 use anyhow::Result;
 use nvim_rs::{Neovim, Value};
-use tokio::net::UnixStream;
 use serde_json::json;
 use std::sync::Arc;
-use crate::ai_integration::AIIntegration;
+use tokio::net::UnixStream;
 
 pub struct ChatInterface {
     nvim: Neovim<UnixStream>,
@@ -90,7 +90,9 @@ impl ChatInterface {
         return win
         "#;
 
-        self.nvim.exec_lua(lua_code, vec![Value::from(buf.id().await?)]).await?;
+        self.nvim
+            .exec_lua(lua_code, vec![Value::from(buf.id().await?)])
+            .await?;
 
         // Set up key mappings for chat
         self.setup_chat_keymaps().await?;
@@ -100,7 +102,8 @@ impl ChatInterface {
 
     async fn setup_chat_keymaps(&self) -> Result<()> {
         if let Some(buf_id) = self.chat_buffer {
-            let lua_code = format!(r#"
+            let lua_code = format!(
+                r#"
             local buf = {}
             
             -- Enter key sends message
@@ -126,7 +129,9 @@ impl ChatInterface {
                 vim.api.nvim_set_current_line('> ')
                 vim.api.nvim_win_set_cursor(0, {{vim.fn.line('.'), 2}})
             end, {{ buffer = buf, desc = 'Cancel current input' }})
-            "#, buf_id);
+            "#,
+                buf_id
+            );
 
             self.nvim.exec_lua(&lua_code, vec![]).await?;
         }
@@ -140,10 +145,14 @@ impl ChatInterface {
             self.add_chat_message("👤 You", message, "Normal").await?;
 
             // Get AI response
-            let response = self.ai.send_message(message, Some("Neovim chat session")).await?;
+            let response = self
+                .ai
+                .send_message(message, Some("Neovim chat session"))
+                .await?;
 
             // Add AI response to chat
-            self.add_chat_message("🤖 Jarvis", &response, "String").await?;
+            self.add_chat_message("🤖 Jarvis", &response, "String")
+                .await?;
 
             // Add new prompt line
             self.add_chat_prompt().await?;
@@ -155,21 +164,21 @@ impl ChatInterface {
     async fn add_chat_message(&self, sender: &str, message: &str, highlight: &str) -> Result<()> {
         if let Some(buf_id) = self.chat_buffer {
             let buf = self.nvim.get_buf_from_id(buf_id).await?;
-            
-            let lines = vec![
-                format!("{}: {}", sender, message),
-                String::new(),
-            ];
+
+            let lines = vec![format!("{}: {}", sender, message), String::new()];
 
             let line_count = buf.line_count().await?;
             buf.set_lines(line_count, line_count, false, lines).await?;
 
             // Add syntax highlighting
-            let lua_code = format!(r#"
+            let lua_code = format!(
+                r#"
             local buf = {}
             local line = vim.api.nvim_buf_line_count(buf) - 2
             vim.api.nvim_buf_add_highlight(buf, -1, '{}', line, 0, -1)
-            "#, buf_id, highlight);
+            "#,
+                buf_id, highlight
+            );
 
             self.nvim.exec_lua(&lua_code, vec![]).await?;
         }
@@ -180,17 +189,21 @@ impl ChatInterface {
     async fn add_chat_prompt(&self) -> Result<()> {
         if let Some(buf_id) = self.chat_buffer {
             let buf = self.nvim.get_buf_from_id(buf_id).await?;
-            
+
             let line_count = buf.line_count().await?;
-            buf.set_lines(line_count, line_count, false, vec!["> ".to_string()]).await?;
+            buf.set_lines(line_count, line_count, false, vec!["> ".to_string()])
+                .await?;
 
             // Move cursor to end of prompt
-            let lua_code = format!(r#"
+            let lua_code = format!(
+                r#"
             local buf = {}
             local line = vim.api.nvim_buf_line_count(buf)
             vim.api.nvim_win_set_cursor(0, {{line, 2}})
             vim.cmd('startinsert!')
-            "#, buf_id);
+            "#,
+                buf_id
+            );
 
             self.nvim.exec_lua(&lua_code, vec![]).await?;
         }

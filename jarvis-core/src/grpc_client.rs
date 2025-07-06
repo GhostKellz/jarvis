@@ -20,9 +20,15 @@ pub mod ghostchain {
     }
 }
 
-use ghostchain::blockchain::{blockchain_service_client::BlockchainServiceClient, Block, NetworkInfo, GasPrice};
-use ghostchain::transaction::{transaction_service_client::TransactionServiceClient, TransactionAnalysis, MempoolStatus};
-use ghostchain::network::{network_service_client::NetworkServiceClient, NetworkMetrics, IPv6Status, QuicStatus};
+use ghostchain::blockchain::{
+    Block, GasPrice, NetworkInfo, blockchain_service_client::BlockchainServiceClient,
+};
+use ghostchain::network::{
+    IPv6Status, NetworkMetrics, QuicStatus, network_service_client::NetworkServiceClient,
+};
+use ghostchain::transaction::{
+    MempoolStatus, TransactionAnalysis, transaction_service_client::TransactionServiceClient,
+};
 
 /// Configuration for GhostChain gRPC connection
 #[derive(Debug, Clone)]
@@ -74,8 +80,9 @@ impl GhostChainClient {
     /// Create a new GhostChain client with optimized network configuration
     pub async fn new(config: GhostChainConfig) -> Result<Self> {
         info!("Connecting to GhostChain node at {}", config.endpoint);
-        
-        let channel = Self::create_optimized_channel(&config).await
+
+        let channel = Self::create_optimized_channel(&config)
+            .await
             .context("Failed to create gRPC channel")?;
 
         let blockchain_client = BlockchainServiceClient::new(channel.clone())
@@ -111,13 +118,16 @@ impl GhostChainClient {
         // Configure TLS if enabled
         if config.use_tls {
             let tls_config = ClientTlsConfig::new();
-            
-            endpoint = endpoint.tls_config(tls_config)
+
+            endpoint = endpoint
+                .tls_config(tls_config)
                 .context("Failed to configure TLS")?;
         }
 
         // Create the channel
-        let channel = endpoint.connect().await
+        let channel = endpoint
+            .connect()
+            .await
             .context("Failed to connect to GhostChain node")?;
 
         debug!("Successfully connected to GhostChain node");
@@ -127,11 +137,13 @@ impl GhostChainClient {
     /// Test connection to GhostChain node
     pub async fn test_connection(&mut self) -> Result<bool> {
         debug!("Testing connection to GhostChain node");
-        
+
         match self.get_network_info().await {
             Ok(info) => {
-                info!("Connected to GhostChain network: {} (chain_id: {})", 
-                     info.network_name, info.chain_id);
+                info!(
+                    "Connected to GhostChain network: {} (chain_id: {})",
+                    info.network_name, info.chain_id
+                );
                 Ok(true)
             }
             Err(e) => {
@@ -144,9 +156,12 @@ impl GhostChainClient {
     /// Get latest block from the blockchain
     pub async fn get_latest_block(&mut self) -> Result<Block> {
         debug!("Fetching latest block");
-        
+
         let request = Request::new(ghostchain::blockchain::Empty {});
-        let response = self.blockchain_client.get_latest_block(request).await
+        let response = self
+            .blockchain_client
+            .get_latest_block(request)
+            .await
             .context("Failed to get latest block")?;
 
         Ok(response.into_inner())
@@ -155,9 +170,12 @@ impl GhostChainClient {
     /// Get network information
     pub async fn get_network_info(&mut self) -> Result<NetworkInfo> {
         debug!("Fetching network information");
-        
+
         let request = Request::new(ghostchain::blockchain::Empty {});
-        let response = self.blockchain_client.get_network_info(request).await
+        let response = self
+            .blockchain_client
+            .get_network_info(request)
+            .await
             .context("Failed to get network info")?;
 
         Ok(response.into_inner())
@@ -166,9 +184,12 @@ impl GhostChainClient {
     /// Get current gas prices
     pub async fn get_gas_price(&mut self) -> Result<GasPrice> {
         debug!("Fetching gas price information");
-        
+
         let request = Request::new(ghostchain::blockchain::Empty {});
-        let response = self.blockchain_client.get_gas_price(request).await
+        let response = self
+            .blockchain_client
+            .get_gas_price(request)
+            .await
             .context("Failed to get gas price")?;
 
         Ok(response.into_inner())
@@ -177,9 +198,12 @@ impl GhostChainClient {
     /// Stream new blocks as they are mined
     pub async fn stream_blocks(&mut self) -> Result<Streaming<Block>> {
         info!("Starting block stream");
-        
+
         let request = Request::new(ghostchain::blockchain::Empty {});
-        let response = self.blockchain_client.stream_blocks(request).await
+        let response = self
+            .blockchain_client
+            .stream_blocks(request)
+            .await
             .context("Failed to start block stream")?;
 
         Ok(response.into_inner())
@@ -188,29 +212,35 @@ impl GhostChainClient {
     /// Get mempool status
     pub async fn get_mempool_status(&mut self) -> Result<MempoolStatus> {
         debug!("Fetching mempool status");
-        
+
         let request = Request::new(ghostchain::transaction::Empty {});
-        let response = self.transaction_client.get_mempool_status(request).await
+        let response = self
+            .transaction_client
+            .get_mempool_status(request)
+            .await
             .context("Failed to get mempool status")?;
 
         Ok(response.into_inner())
     }
 
     /// Analyze a transaction for security and optimization
-    pub async fn analyze_transaction(&mut self, tx_hash: &str, deep_analysis: bool) -> Result<TransactionAnalysis> {
+    pub async fn analyze_transaction(
+        &mut self,
+        tx_hash: &str,
+        deep_analysis: bool,
+    ) -> Result<TransactionAnalysis> {
         debug!("Analyzing transaction: {}", tx_hash);
-        
+
         let request = Request::new(ghostchain::transaction::AnalyzeTransactionRequest {
             transaction_hash: tx_hash.to_string(),
             deep_analysis,
-            analysis_types: vec![
-                "security".to_string(),
-                "gas".to_string(), 
-                "mev".to_string(),
-            ],
+            analysis_types: vec!["security".to_string(), "gas".to_string(), "mev".to_string()],
         });
 
-        let response = self.transaction_client.analyze_transaction(request).await
+        let response = self
+            .transaction_client
+            .analyze_transaction(request)
+            .await
             .context("Failed to analyze transaction")?;
 
         Ok(response.into_inner())
@@ -219,9 +249,12 @@ impl GhostChainClient {
     /// Get current network performance metrics
     pub async fn get_network_metrics(&mut self) -> Result<NetworkMetrics> {
         debug!("Fetching network metrics");
-        
+
         let request = Request::new(ghostchain::network::Empty {});
-        let response = self.network_client.get_network_metrics(request).await
+        let response = self
+            .network_client
+            .get_network_metrics(request)
+            .await
             .context("Failed to get network metrics")?;
 
         Ok(response.into_inner())
@@ -230,9 +263,12 @@ impl GhostChainClient {
     /// Get IPv6 status and configuration
     pub async fn get_ipv6_status(&mut self) -> Result<IPv6Status> {
         debug!("Fetching IPv6 status");
-        
+
         let request = Request::new(ghostchain::network::Empty {});
-        let response = self.network_client.get_i_pv6_status(request).await
+        let response = self
+            .network_client
+            .get_i_pv6_status(request)
+            .await
             .context("Failed to get IPv6 status")?;
 
         Ok(response.into_inner())
@@ -241,9 +277,12 @@ impl GhostChainClient {
     /// Get QUIC status and configuration  
     pub async fn get_quic_status(&mut self) -> Result<QuicStatus> {
         debug!("Fetching QUIC status");
-        
+
         let request = Request::new(ghostchain::network::Empty {});
-        let response = self.network_client.get_quic_status(request).await
+        let response = self
+            .network_client
+            .get_quic_status(request)
+            .await
             .context("Failed to get QUIC status")?;
 
         Ok(response.into_inner())
@@ -252,9 +291,12 @@ impl GhostChainClient {
     /// Stream network metrics for real-time monitoring
     pub async fn stream_network_metrics(&mut self) -> Result<Streaming<NetworkMetrics>> {
         info!("Starting network metrics stream");
-        
+
         let request = Request::new(ghostchain::network::Empty {});
-        let response = self.network_client.stream_network_metrics(request).await
+        let response = self
+            .network_client
+            .stream_network_metrics(request)
+            .await
             .context("Failed to start network metrics stream")?;
 
         Ok(response.into_inner())
@@ -268,10 +310,10 @@ mod tests {
     #[tokio::test]
     async fn test_client_creation() {
         let config = GhostChainConfig::default();
-        
+
         // This will fail without a running GhostChain node, but tests the client creation
         let result = GhostChainClient::new(config).await;
-        
+
         // We expect this to fail in tests without a node
         assert!(result.is_err());
     }
@@ -279,7 +321,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = GhostChainConfig::default();
-        
+
         assert!(config.ipv6_preferred);
         assert_eq!(config.endpoint, "https://[::1]:9090");
     }

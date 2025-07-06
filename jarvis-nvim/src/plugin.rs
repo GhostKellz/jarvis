@@ -1,7 +1,7 @@
+use crate::{AIIntegration, JarvisNvim};
 use anyhow::Result;
-use mlua::{Lua, Table, Function, UserData, UserDataMethods};
+use mlua::{Function, Lua, Table, UserData, UserDataMethods};
 use std::sync::Arc;
-use crate::{JarvisNvim, AIIntegration};
 
 pub struct Plugin {
     jarvis: Arc<JarvisNvim>,
@@ -21,7 +21,10 @@ impl Plugin {
         let explain_fn = lua.create_async_function(move |_, ()| {
             let jarvis = jarvis_clone.clone();
             async move {
-                jarvis.explain_selection().await.map_err(mlua::Error::external)
+                jarvis
+                    .explain_selection()
+                    .await
+                    .map_err(mlua::Error::external)
             }
         })?;
         jarvis_module.set("explain", explain_fn)?;
@@ -30,7 +33,10 @@ impl Plugin {
         let improve_fn = lua.create_async_function(move |_, ()| {
             let jarvis = jarvis_clone.clone();
             async move {
-                jarvis.suggest_improvements().await.map_err(mlua::Error::external)
+                jarvis
+                    .suggest_improvements()
+                    .await
+                    .map_err(mlua::Error::external)
             }
         })?;
         jarvis_module.set("improve", improve_fn)?;
@@ -38,18 +44,14 @@ impl Plugin {
         let jarvis_clone = self.jarvis.clone();
         let fix_fn = lua.create_async_function(move |_, ()| {
             let jarvis = jarvis_clone.clone();
-            async move {
-                jarvis.fix_errors().await.map_err(mlua::Error::external)
-            }
+            async move { jarvis.fix_errors().await.map_err(mlua::Error::external) }
         })?;
         jarvis_module.set("fix", fix_fn)?;
 
         let jarvis_clone = self.jarvis.clone();
         let chat_fn = lua.create_async_function(move |_, ()| {
             let jarvis = jarvis_clone.clone();
-            async move {
-                jarvis.chat_mode().await.map_err(mlua::Error::external)
-            }
+            async move { jarvis.chat_mode().await.map_err(mlua::Error::external) }
         })?;
         jarvis_module.set("chat", chat_fn)?;
 
@@ -57,28 +59,38 @@ impl Plugin {
         let generate_fn = lua.create_async_function(move |_, description: String| {
             let jarvis = jarvis_clone.clone();
             async move {
-                jarvis.generate_code(&description).await.map_err(mlua::Error::external)
+                jarvis
+                    .generate_code(&description)
+                    .await
+                    .map_err(mlua::Error::external)
             }
         })?;
         jarvis_module.set("generate", generate_fn)?;
 
         // Register AI functions
         let ai_clone = self.ai.clone();
-        let ai_explain_fn = lua.create_async_function(move |_, (code, language, context): (String, String, String)| {
-            let ai = ai_clone.clone();
-            async move {
-                ai.explain_code(&code, &language, &context).await.map_err(mlua::Error::external)
-            }
-        })?;
+        let ai_explain_fn = lua.create_async_function(
+            move |_, (code, language, context): (String, String, String)| {
+                let ai = ai_clone.clone();
+                async move {
+                    ai.explain_code(&code, &language, &context)
+                        .await
+                        .map_err(mlua::Error::external)
+                }
+            },
+        )?;
         jarvis_module.set("ai_explain", ai_explain_fn)?;
 
         let ai_clone = self.ai.clone();
-        let ai_improve_fn = lua.create_async_function(move |_, (code, language): (String, String)| {
-            let ai = ai_clone.clone();
-            async move {
-                ai.suggest_improvements(&code, &language).await.map_err(mlua::Error::external)
-            }
-        })?;
+        let ai_improve_fn =
+            lua.create_async_function(move |_, (code, language): (String, String)| {
+                let ai = ai_clone.clone();
+                async move {
+                    ai.suggest_improvements(&code, &language)
+                        .await
+                        .map_err(mlua::Error::external)
+                }
+            })?;
         jarvis_module.set("ai_improve", ai_improve_fn)?;
 
         // Register the module globally
@@ -183,15 +195,24 @@ return {
 impl UserData for Plugin {
     fn add_methods<'lua, M: UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_async_method("explain", |_, this, ()| async move {
-            this.jarvis.explain_selection().await.map_err(mlua::Error::external)
+            this.jarvis
+                .explain_selection()
+                .await
+                .map_err(mlua::Error::external)
         });
 
         methods.add_async_method("improve", |_, this, ()| async move {
-            this.jarvis.suggest_improvements().await.map_err(mlua::Error::external)
+            this.jarvis
+                .suggest_improvements()
+                .await
+                .map_err(mlua::Error::external)
         });
 
         methods.add_async_method("fix", |_, this, ()| async move {
-            this.jarvis.fix_errors().await.map_err(mlua::Error::external)
+            this.jarvis
+                .fix_errors()
+                .await
+                .map_err(mlua::Error::external)
         });
 
         methods.add_async_method("chat", |_, this, ()| async move {
@@ -199,7 +220,10 @@ impl UserData for Plugin {
         });
 
         methods.add_async_method("generate", |_, this, description: String| async move {
-            this.jarvis.generate_code(&description).await.map_err(mlua::Error::external)
+            this.jarvis
+                .generate_code(&description)
+                .await
+                .map_err(mlua::Error::external)
         });
     }
 }

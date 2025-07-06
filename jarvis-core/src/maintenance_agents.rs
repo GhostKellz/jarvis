@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -66,29 +66,32 @@ impl SmartContractAuditorAgent {
             metrics: AgentMetrics::default(),
         }
     }
-    
-    async fn analyze_contract_security(&self, contract_addresses: &[String]) -> Result<Vec<Finding>> {
+
+    async fn analyze_contract_security(
+        &self,
+        contract_addresses: &[String],
+    ) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         for address in contract_addresses {
             // Simulate contract analysis
             findings.extend(self.perform_static_analysis(address).await?);
-            
+
             if self.config.enable_dynamic_analysis {
                 findings.extend(self.perform_dynamic_analysis(address).await?);
             }
-            
+
             if self.config.check_gas_optimization {
                 findings.extend(self.analyze_gas_usage(address).await?);
             }
         }
-        
+
         Ok(findings)
     }
-    
+
     async fn perform_static_analysis(&self, contract_address: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Check for common vulnerabilities
         for pattern in &self.vulnerability_database.patterns {
             // Simulate pattern matching
@@ -96,8 +99,10 @@ impl SmartContractAuditorAgent {
                 findings.push(Finding {
                     category: FindingCategory::Security,
                     title: format!("Potential {}", pattern.name),
-                    description: format!("Contract {} may contain {}: {}", 
-                        contract_address, pattern.name, pattern.description),
+                    description: format!(
+                        "Contract {} may contain {}: {}",
+                        contract_address, pattern.name, pattern.description
+                    ),
                     impact: match pattern.severity {
                         VulnerabilitySeverity::Critical => ImpactLevel::Critical,
                         VulnerabilitySeverity::High => ImpactLevel::High,
@@ -119,18 +124,21 @@ impl SmartContractAuditorAgent {
                 });
             }
         }
-        
+
         Ok(findings)
     }
-    
+
     async fn perform_dynamic_analysis(&self, contract_address: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Simulate dynamic analysis (runtime behavior analysis)
         findings.push(Finding {
             category: FindingCategory::Security,
             title: "Runtime Analysis Complete".to_string(),
-            description: format!("Dynamic analysis performed on contract {}", contract_address),
+            description: format!(
+                "Dynamic analysis performed on contract {}",
+                contract_address
+            ),
             impact: ImpactLevel::Low,
             urgency: UrgencyLevel::Low,
             evidence: vec![Evidence {
@@ -140,22 +148,24 @@ impl SmartContractAuditorAgent {
                 source: "Dynamic Analyzer".to_string(),
             }],
         });
-        
+
         Ok(findings)
     }
-    
+
     async fn analyze_gas_usage(&self, contract_address: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Simulate gas usage analysis
         let estimated_gas = 150000; // Simulate high gas usage
-        
+
         if estimated_gas > 100000 {
             findings.push(Finding {
                 category: FindingCategory::Optimization,
                 title: "High Gas Usage Detected".to_string(),
-                description: format!("Contract {} has high gas usage: {} gas units", 
-                    contract_address, estimated_gas),
+                description: format!(
+                    "Contract {} has high gas usage: {} gas units",
+                    contract_address, estimated_gas
+                ),
                 impact: ImpactLevel::Medium,
                 urgency: UrgencyLevel::Medium,
                 evidence: vec![Evidence {
@@ -166,14 +176,17 @@ impl SmartContractAuditorAgent {
                 }],
             });
         }
-        
+
         Ok(findings)
     }
-    
+
     fn should_flag_pattern(&self, pattern: &VulnerabilityPattern, _contract_address: &str) -> bool {
         // Simulate pattern detection logic
         // In real implementation, this would analyze actual contract bytecode/source
-        matches!(pattern.severity, VulnerabilitySeverity::High | VulnerabilitySeverity::Critical)
+        matches!(
+            pattern.severity,
+            VulnerabilitySeverity::High | VulnerabilitySeverity::Critical
+        )
     }
 }
 
@@ -182,24 +195,35 @@ impl BlockchainAgent for SmartContractAuditorAgent {
     fn agent_type(&self) -> AgentType {
         AgentType::SmartContractAuditor
     }
-    
+
     fn description(&self) -> String {
         "Analyzes smart contracts for security vulnerabilities, gas optimization opportunities, and compliance issues".to_string()
     }
-    
+
     async fn analyze(&self, context: &BlockchainContext) -> Result<AnalysisResult> {
-        let findings = self.analyze_contract_security(&context.active_contracts).await?;
-        
-        let severity = if findings.iter().any(|f| matches!(f.impact, ImpactLevel::Critical)) {
+        let findings = self
+            .analyze_contract_security(&context.active_contracts)
+            .await?;
+
+        let severity = if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::Critical))
+        {
             AnalysisSeverity::Emergency
-        } else if findings.iter().any(|f| matches!(f.impact, ImpactLevel::High)) {
+        } else if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::High))
+        {
             AnalysisSeverity::Critical
-        } else if findings.iter().any(|f| matches!(f.impact, ImpactLevel::Medium)) {
+        } else if findings
+            .iter()
+            .any(|f| matches!(f.impact, ImpactLevel::Medium))
+        {
             AnalysisSeverity::Warning
         } else {
             AnalysisSeverity::Info
         };
-        
+
         Ok(AnalysisResult {
             agent_type: self.agent_type(),
             timestamp: Utc::now(),
@@ -209,19 +233,24 @@ impl BlockchainAgent for SmartContractAuditorAgent {
             metadata: HashMap::new(),
         })
     }
-    
+
     async fn recommend(&self, analysis: &AnalysisResult) -> Result<Vec<Recommendation>> {
         let mut recommendations = Vec::new();
-        
+
         for finding in &analysis.findings {
             match finding.category {
                 FindingCategory::Security => {
-                    if finding.impact == ImpactLevel::Critical || finding.impact == ImpactLevel::High {
+                    if finding.impact == ImpactLevel::Critical
+                        || finding.impact == ImpactLevel::High
+                    {
                         recommendations.push(Recommendation {
                             id: Uuid::new_v4().to_string(),
                             agent_type: self.agent_type(),
                             title: format!("Urgent Security Fix Required: {}", finding.title),
-                            description: format!("Critical security issue detected: {}", finding.description),
+                            description: format!(
+                                "Critical security issue detected: {}",
+                                finding.description
+                            ),
                             action_type: ActionType::SecurityPatch,
                             priority: 10,
                             estimated_impact: EstimatedImpact {
@@ -244,21 +273,29 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                                     description: "Pause contract operations".to_string(),
                                     command: Some("jarvis contract pause".to_string()),
                                     expected_duration: std::time::Duration::from_secs(60),
-                                    validation_criteria: vec!["Contract operations paused".to_string()],
+                                    validation_criteria: vec![
+                                        "Contract operations paused".to_string(),
+                                    ],
                                 },
                                 ImplementationStep {
                                     step_number: 2,
                                     description: "Deploy security patch".to_string(),
-                                    command: Some("jarvis contract upgrade --security-patch".to_string()),
+                                    command: Some(
+                                        "jarvis contract upgrade --security-patch".to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(300),
-                                    validation_criteria: vec!["Security patch deployed".to_string()],
+                                    validation_criteria: vec![
+                                        "Security patch deployed".to_string(),
+                                    ],
                                 },
                                 ImplementationStep {
                                     step_number: 3,
                                     description: "Resume contract operations".to_string(),
                                     command: Some("jarvis contract resume".to_string()),
                                     expected_duration: std::time::Duration::from_secs(30),
-                                    validation_criteria: vec!["Contract operations resumed".to_string()],
+                                    validation_criteria: vec![
+                                        "Contract operations resumed".to_string(),
+                                    ],
                                 },
                             ],
                             rollback_plan: Some(RollbackPlan {
@@ -266,27 +303,31 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                                     "Transaction failure rate > 5%".to_string(),
                                     "Contract state corruption detected".to_string(),
                                 ],
-                                rollback_steps: vec![
-                                    ImplementationStep {
-                                        step_number: 1,
-                                        description: "Revert to previous contract version".to_string(),
-                                        command: Some("jarvis contract rollback --version previous".to_string()),
-                                        expected_duration: std::time::Duration::from_secs(180),
-                                        validation_criteria: vec!["Previous version restored".to_string()],
-                                    },
-                                ],
+                                rollback_steps: vec![ImplementationStep {
+                                    step_number: 1,
+                                    description: "Revert to previous contract version".to_string(),
+                                    command: Some(
+                                        "jarvis contract rollback --version previous".to_string(),
+                                    ),
+                                    expected_duration: std::time::Duration::from_secs(180),
+                                    validation_criteria: vec![
+                                        "Previous version restored".to_string(),
+                                    ],
+                                }],
                                 recovery_time: std::time::Duration::from_secs(300),
                             }),
                         });
                     }
-                },
+                }
                 FindingCategory::Optimization => {
                     if finding.title.contains("Gas Usage") {
                         recommendations.push(Recommendation {
                             id: Uuid::new_v4().to_string(),
                             agent_type: self.agent_type(),
                             title: "Optimize Contract Gas Usage".to_string(),
-                            description: "Implement gas optimization strategies to reduce transaction costs".to_string(),
+                            description:
+                                "Implement gas optimization strategies to reduce transaction costs"
+                                    .to_string(),
                             action_type: ActionType::PerformanceTuning,
                             priority: 6,
                             estimated_impact: EstimatedImpact {
@@ -299,9 +340,7 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                                 "Contract source code available".to_string(),
                                 "Gas optimization tools configured".to_string(),
                             ],
-                            risks: vec![
-                                "Code changes may introduce bugs".to_string(),
-                            ],
+                            risks: vec!["Code changes may introduce bugs".to_string()],
                             implementation_steps: vec![
                                 ImplementationStep {
                                     step_number: 1,
@@ -315,31 +354,33 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                                     description: "Apply gas optimizations".to_string(),
                                     command: Some("jarvis contract optimize-gas".to_string()),
                                     expected_duration: std::time::Duration::from_secs(300),
-                                    validation_criteria: vec!["Gas optimizations applied".to_string()],
+                                    validation_criteria: vec![
+                                        "Gas optimizations applied".to_string(),
+                                    ],
                                 },
                             ],
                             rollback_plan: None,
                         });
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
-        
+
         Ok(recommendations)
     }
-    
+
     async fn execute(&self, recommendation: &Recommendation) -> Result<ExecutionResult> {
         let mut logs = Vec::new();
         let started_at = Utc::now();
-        
+
         logs.push(ExecutionLog {
             timestamp: Utc::now(),
             level: LogLevel::Info,
             message: format!("Starting contract operation: {}", recommendation.title),
             context: HashMap::new(),
         });
-        
+
         for step in &recommendation.implementation_steps {
             logs.push(ExecutionLog {
                 timestamp: Utc::now(),
@@ -347,7 +388,7 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                 message: format!("Executing step {}: {}", step.step_number, step.description),
                 context: HashMap::new(),
             });
-            
+
             // Simulate potential security operations
             if step.description.contains("pause") {
                 logs.push(ExecutionLog {
@@ -358,7 +399,7 @@ impl BlockchainAgent for SmartContractAuditorAgent {
                 });
             }
         }
-        
+
         Ok(ExecutionResult {
             recommendation_id: recommendation.id.clone(),
             status: ExecutionStatus::Completed,
@@ -370,7 +411,7 @@ impl BlockchainAgent for SmartContractAuditorAgent {
             rollback_performed: false,
         })
     }
-    
+
     async fn health_check(&self) -> Result<AgentHealth> {
         Ok(AgentHealth {
             status: HealthStatus::Healthy,
@@ -380,7 +421,7 @@ impl BlockchainAgent for SmartContractAuditorAgent {
             average_response_time: std::time::Duration::from_millis(800),
         })
     }
-    
+
     fn get_metrics(&self) -> AgentMetrics {
         self.metrics.clone()
     }
@@ -446,17 +487,19 @@ impl MaintenanceSchedulerAgent {
             metrics: AgentMetrics::default(),
         }
     }
-    
+
     async fn analyze_maintenance_needs(&self, context: &BlockchainContext) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        
+
         // Check system resource usage
         if context.system_resources.disk_usage > 80 {
             findings.push(Finding {
                 category: FindingCategory::Maintenance,
                 title: "High Disk Usage Detected".to_string(),
-                description: format!("Disk usage is at {}%. Cleanup maintenance required.", 
-                    context.system_resources.disk_usage),
+                description: format!(
+                    "Disk usage is at {}%. Cleanup maintenance required.",
+                    context.system_resources.disk_usage
+                ),
                 impact: ImpactLevel::Medium,
                 urgency: UrgencyLevel::High,
                 evidence: vec![Evidence {
@@ -467,24 +510,29 @@ impl MaintenanceSchedulerAgent {
                 }],
             });
         }
-        
+
         // Check memory usage
-        if context.system_resources.memory_usage > 8 * 1024 * 1024 * 1024 { // 8GB
+        if context.system_resources.memory_usage > 8 * 1024 * 1024 * 1024 {
+            // 8GB
             findings.push(Finding {
                 category: FindingCategory::Maintenance,
                 title: "High Memory Usage".to_string(),
-                description: "Memory usage is high. Consider optimizing or adding more memory.".to_string(),
+                description: "Memory usage is high. Consider optimizing or adding more memory."
+                    .to_string(),
                 impact: ImpactLevel::Medium,
                 urgency: UrgencyLevel::Medium,
                 evidence: vec![Evidence {
                     evidence_type: EvidenceType::SystemSnapshot,
-                    data: format!("Memory usage: {} bytes", context.system_resources.memory_usage),
+                    data: format!(
+                        "Memory usage: {} bytes",
+                        context.system_resources.memory_usage
+                    ),
                     timestamp: Utc::now(),
                     source: "Memory Monitor".to_string(),
                 }],
             });
         }
-        
+
         Ok(findings)
     }
 }
@@ -494,22 +542,28 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
     fn agent_type(&self) -> AgentType {
         AgentType::MaintenanceScheduler
     }
-    
+
     fn description(&self) -> String {
         "Schedules and manages automated maintenance tasks for blockchain infrastructure including updates, cleanup, and optimization".to_string()
     }
-    
+
     async fn analyze(&self, context: &BlockchainContext) -> Result<AnalysisResult> {
         let findings = self.analyze_maintenance_needs(context).await?;
-        
-        let severity = if findings.iter().any(|f| matches!(f.urgency, UrgencyLevel::Emergency | UrgencyLevel::Critical)) {
+
+        let severity = if findings
+            .iter()
+            .any(|f| matches!(f.urgency, UrgencyLevel::Emergency | UrgencyLevel::Critical))
+        {
             AnalysisSeverity::Critical
-        } else if findings.iter().any(|f| matches!(f.urgency, UrgencyLevel::High)) {
+        } else if findings
+            .iter()
+            .any(|f| matches!(f.urgency, UrgencyLevel::High))
+        {
             AnalysisSeverity::Warning
         } else {
             AnalysisSeverity::Info
         };
-        
+
         Ok(AnalysisResult {
             agent_type: self.agent_type(),
             timestamp: Utc::now(),
@@ -519,10 +573,10 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
             metadata: HashMap::new(),
         })
     }
-    
+
     async fn recommend(&self, analysis: &AnalysisResult) -> Result<Vec<Recommendation>> {
         let mut recommendations = Vec::new();
-        
+
         for finding in &analysis.findings {
             match finding.category {
                 FindingCategory::Maintenance => {
@@ -531,7 +585,8 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
                             id: Uuid::new_v4().to_string(),
                             agent_type: self.agent_type(),
                             title: "Schedule Disk Cleanup Maintenance".to_string(),
-                            description: "Automated disk cleanup to free up storage space".to_string(),
+                            description: "Automated disk cleanup to free up storage space"
+                                .to_string(),
                             action_type: ActionType::MaintenanceTask,
                             priority: 7,
                             estimated_impact: EstimatedImpact {
@@ -549,21 +604,26 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
                                 "Backup verification complete".to_string(),
                                 "Maintenance window available".to_string(),
                             ],
-                            risks: vec![
-                                "Potential temporary performance impact".to_string(),
-                            ],
+                            risks: vec!["Potential temporary performance impact".to_string()],
                             implementation_steps: vec![
                                 ImplementationStep {
                                     step_number: 1,
                                     description: "Create backup of critical data".to_string(),
-                                    command: Some("jarvis backup create --critical-only".to_string()),
+                                    command: Some(
+                                        "jarvis backup create --critical-only".to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(600),
-                                    validation_criteria: vec!["Backup completed successfully".to_string()],
+                                    validation_criteria: vec![
+                                        "Backup completed successfully".to_string(),
+                                    ],
                                 },
                                 ImplementationStep {
                                     step_number: 2,
                                     description: "Clean up old log files".to_string(),
-                                    command: Some("jarvis maintenance cleanup --logs --older-than 30d".to_string()),
+                                    command: Some(
+                                        "jarvis maintenance cleanup --logs --older-than 30d"
+                                            .to_string(),
+                                    ),
                                     expected_duration: std::time::Duration::from_secs(300),
                                     validation_criteria: vec!["Log cleanup completed".to_string()],
                                 },
@@ -578,25 +638,25 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
                             rollback_plan: None,
                         });
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
-        
+
         Ok(recommendations)
     }
-    
+
     async fn execute(&self, recommendation: &Recommendation) -> Result<ExecutionResult> {
         let mut logs = Vec::new();
         let started_at = Utc::now();
-        
+
         logs.push(ExecutionLog {
             timestamp: Utc::now(),
             level: LogLevel::Info,
             message: format!("Starting maintenance task: {}", recommendation.title),
             context: HashMap::new(),
         });
-        
+
         for step in &recommendation.implementation_steps {
             logs.push(ExecutionLog {
                 timestamp: Utc::now(),
@@ -604,18 +664,18 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
                 message: format!("Executing step {}: {}", step.step_number, step.description),
                 context: HashMap::new(),
             });
-            
+
             // Simulate maintenance operations
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        
+
         logs.push(ExecutionLog {
             timestamp: Utc::now(),
             level: LogLevel::Info,
             message: "Maintenance task completed successfully".to_string(),
             context: HashMap::new(),
         });
-        
+
         Ok(ExecutionResult {
             recommendation_id: recommendation.id.clone(),
             status: ExecutionStatus::Completed,
@@ -627,7 +687,7 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
             rollback_performed: false,
         })
     }
-    
+
     async fn health_check(&self) -> Result<AgentHealth> {
         Ok(AgentHealth {
             status: HealthStatus::Healthy,
@@ -637,7 +697,7 @@ impl BlockchainAgent for MaintenanceSchedulerAgent {
             average_response_time: std::time::Duration::from_millis(600),
         })
     }
-    
+
     fn get_metrics(&self) -> AgentMetrics {
         self.metrics.clone()
     }
@@ -665,7 +725,8 @@ impl Default for VulnerabilityDatabase {
                     severity: VulnerabilitySeverity::Critical,
                     pattern: "external_call.*state_change".to_string(),
                     description: "Function vulnerable to reentrancy attacks".to_string(),
-                    mitigation: "Use reentrancy guards or checks-effects-interactions pattern".to_string(),
+                    mitigation: "Use reentrancy guards or checks-effects-interactions pattern"
+                        .to_string(),
                 },
                 VulnerabilityPattern {
                     id: "OVERFLOW_001".to_string(),

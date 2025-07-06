@@ -30,12 +30,7 @@ impl AIIntegration {
             self.start_conversation("Neovim Session").await?;
         }
 
-        let conversation_id = self.current_conversation
-            .read()
-            .await
-            .as_ref()
-            .unwrap()
-            .id;
+        let conversation_id = self.current_conversation.read().await.as_ref().unwrap().id;
 
         // Add user message
         let user_metadata = MessageMetadata {
@@ -45,12 +40,9 @@ impl AIIntegration {
             system_context: None,
         };
 
-        self.memory.add_message(
-            conversation_id,
-            MessageRole::User,
-            content,
-            user_metadata,
-        ).await?;
+        self.memory
+            .add_message(conversation_id, MessageRole::User, content, user_metadata)
+            .await?;
 
         // Generate AI response
         let start_time = std::time::Instant::now();
@@ -69,12 +61,14 @@ impl AIIntegration {
             system_context: None,
         };
 
-        self.memory.add_message(
-            conversation_id,
-            MessageRole::Assistant,
-            &response,
-            assistant_metadata,
-        ).await?;
+        self.memory
+            .add_message(
+                conversation_id,
+                MessageRole::Assistant,
+                &response,
+                assistant_metadata,
+            )
+            .await?;
 
         Ok(response)
     }
@@ -85,7 +79,8 @@ impl AIIntegration {
             language, language, code, context
         );
 
-        self.send_message(&prompt, Some("Code explanation request")).await
+        self.send_message(&prompt, Some("Code explanation request"))
+            .await
     }
 
     pub async fn suggest_improvements(&self, code: &str, language: &str) -> Result<String> {
@@ -94,26 +89,39 @@ impl AIIntegration {
             language, language, code
         );
 
-        self.send_message(&prompt, Some("Code improvement request")).await
+        self.send_message(&prompt, Some("Code improvement request"))
+            .await
     }
 
-    pub async fn fix_errors(&self, code: &str, errors: &[String], language: &str) -> Result<String> {
+    pub async fn fix_errors(
+        &self,
+        code: &str,
+        errors: &[String],
+        language: &str,
+    ) -> Result<String> {
         let errors_text = errors.join("\n");
         let prompt = format!(
             "Fix the following errors in this {} code:\n\nErrors:\n{}\n\nCode:\n```{}\n{}\n```\n\nProvide the corrected code with explanations.",
             language, errors_text, language, code
         );
 
-        self.send_message(&prompt, Some("Error fixing request")).await
+        self.send_message(&prompt, Some("Error fixing request"))
+            .await
     }
 
-    pub async fn generate_code(&self, description: &str, language: &str, context: &str) -> Result<String> {
+    pub async fn generate_code(
+        &self,
+        description: &str,
+        language: &str,
+        context: &str,
+    ) -> Result<String> {
         let prompt = format!(
             "Generate {} code for: {}\n\nContext: {}\n\nProvide clean, well-commented code that follows best practices.",
             language, description, context
         );
 
-        self.send_message(&prompt, Some("Code generation request")).await
+        self.send_message(&prompt, Some("Code generation request"))
+            .await
     }
 
     pub async fn refactor_code(&self, code: &str, language: &str, goal: &str) -> Result<String> {
@@ -122,7 +130,8 @@ impl AIIntegration {
             language, goal, language, code
         );
 
-        self.send_message(&prompt, Some("Code refactoring request")).await
+        self.send_message(&prompt, Some("Code refactoring request"))
+            .await
     }
 
     pub async fn add_comments(&self, code: &str, language: &str) -> Result<String> {
@@ -131,16 +140,23 @@ impl AIIntegration {
             language, language, code
         );
 
-        self.send_message(&prompt, Some("Code documentation request")).await
+        self.send_message(&prompt, Some("Code documentation request"))
+            .await
     }
 
-    pub async fn convert_language(&self, code: &str, from_lang: &str, to_lang: &str) -> Result<String> {
+    pub async fn convert_language(
+        &self,
+        code: &str,
+        from_lang: &str,
+        to_lang: &str,
+    ) -> Result<String> {
         let prompt = format!(
             "Convert this {} code to {}. Maintain the same functionality and logic:\n\n```{}\n{}\n```",
             from_lang, to_lang, from_lang, code
         );
 
-        self.send_message(&prompt, Some("Language conversion request")).await
+        self.send_message(&prompt, Some("Language conversion request"))
+            .await
     }
 
     pub async fn analyze_performance(&self, code: &str, language: &str) -> Result<String> {
@@ -149,7 +165,8 @@ impl AIIntegration {
             language, language, code
         );
 
-        self.send_message(&prompt, Some("Performance analysis request")).await
+        self.send_message(&prompt, Some("Performance analysis request"))
+            .await
     }
 
     pub async fn generate_tests(&self, code: &str, language: &str) -> Result<String> {
@@ -158,7 +175,8 @@ impl AIIntegration {
             language, language, code
         );
 
-        self.send_message(&prompt, Some("Test generation request")).await
+        self.send_message(&prompt, Some("Test generation request"))
+            .await
     }
 
     pub async fn system_prompt(&self, query: &str, system_info: &str) -> Result<String> {
@@ -167,6 +185,7 @@ impl AIIntegration {
             query, system_info
         );
 
-        self.send_message(&prompt, Some("System administration request")).await
+        self.send_message(&prompt, Some("System administration request"))
+            .await
     }
 }

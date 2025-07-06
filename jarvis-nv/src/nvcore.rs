@@ -1,6 +1,6 @@
 /*!
  * NVIDIA Core Module for JARVIS-NV
- * 
+ *
  * Core NVIDIA-specific functionality including CUDA operations,
  * container runtime integration, and hardware acceleration.
  */
@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, warn, error, debug};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NvidiaCoreInfo {
@@ -98,19 +98,19 @@ pub struct NvidiaCore {
     // Device information
     nvidia_info: Arc<RwLock<Option<NvidiaCoreInfo>>>,
     device_metrics: Arc<Mutex<Vec<NvidiaCoreMetrics>>>,
-    
+
     // Performance management
     active_profile: Arc<RwLock<Option<PerformanceProfile>>>,
     thermal_limits: Arc<RwLock<HashMap<u32, u32>>>, // device_id -> temp_limit
-    
+
     // Process tracking
     cuda_processes: Arc<RwLock<HashMap<u32, Vec<CudaProcess>>>>, // device_id -> processes
-    
+
     // Configuration
     monitoring_enabled: bool,
     auto_optimization: bool,
     thermal_protection: bool,
-    
+
     // Runtime state
     is_initialized: Arc<RwLock<bool>>,
     last_update: Arc<RwLock<Option<Instant>>>,
@@ -158,10 +158,7 @@ impl NvidiaCore {
         info!("🔍 Detecting NVIDIA hardware and drivers...");
 
         // Check for nvidia-smi
-        let nvidia_smi_available = Command::new("nvidia-smi")
-            .arg("--version")
-            .output()
-            .is_ok();
+        let nvidia_smi_available = Command::new("nvidia-smi").arg("--version").output().is_ok();
 
         if !nvidia_smi_available {
             warn!("⚠️ nvidia-smi not available, NVIDIA features will be limited");
@@ -170,7 +167,7 @@ impl NvidiaCore {
 
         // Get driver version
         let driver_version = self.get_driver_version().await?;
-        
+
         // Get CUDA version
         let cuda_version = self.get_cuda_version().await;
 
@@ -210,7 +207,10 @@ impl NvidiaCore {
             .context("Failed to execute nvidia-smi")?;
 
         if !output.status.success() {
-            anyhow::bail!("nvidia-smi failed: {}", String::from_utf8_lossy(&output.stderr));
+            anyhow::bail!(
+                "nvidia-smi failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         let version = String::from_utf8(output.stdout)?
@@ -226,17 +226,14 @@ impl NvidiaCore {
 
     /// Get CUDA version
     async fn get_cuda_version(&self) -> Option<String> {
-        let output = Command::new("nvcc")
-            .arg("--version")
-            .output()
-            .ok()?;
+        let output = Command::new("nvcc").arg("--version").output().ok()?;
 
         if !output.status.success() {
             return None;
         }
 
         let version_text = String::from_utf8(output.stdout).ok()?;
-        
+
         // Parse CUDA version from nvcc output
         for line in version_text.lines() {
             if line.contains("release") {
@@ -261,7 +258,10 @@ impl NvidiaCore {
             .context("Failed to execute nvidia-smi")?;
 
         if !output.status.success() {
-            anyhow::bail!("nvidia-smi query failed: {}", String::from_utf8_lossy(&output.stderr));
+            anyhow::bail!(
+                "nvidia-smi query failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         let output_text = String::from_utf8(output.stdout)?;
@@ -330,12 +330,14 @@ impl NvidiaCore {
             .unwrap_or(false);
 
         // Get nvidia-container-toolkit version
-        let nvidia_container_toolkit_version = if let Ok(output) = Command::new("nvidia-container-toolkit")
-            .arg("--version")
-            .output()
+        let nvidia_container_toolkit_version = if let Ok(output) =
+            Command::new("nvidia-container-toolkit")
+                .arg("--version")
+                .output()
         {
             if output.status.success() {
-                String::from_utf8(output.stdout).ok()
+                String::from_utf8(output.stdout)
+                    .ok()
                     .and_then(|s| s.lines().next().map(|l| l.to_string()))
             } else {
                 None
@@ -346,13 +348,28 @@ impl NvidiaCore {
 
         // Check supported container engines
         let mut supported_engines = Vec::new();
-        if Command::new("which").arg("docker").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("which")
+            .arg("docker")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             supported_engines.push("docker".to_string());
         }
-        if Command::new("which").arg("podman").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("which")
+            .arg("podman")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             supported_engines.push("podman".to_string());
         }
-        if Command::new("which").arg("containerd").output().map(|o| o.status.success()).unwrap_or(false) {
+        if Command::new("which")
+            .arg("containerd")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             supported_engines.push("containerd".to_string());
         }
 
@@ -373,10 +390,11 @@ impl NvidiaCore {
         let os_version = os_info.version().to_string();
 
         // Get kernel version
-        let kernel_output = Command::new("uname").arg("-r").output()
+        let kernel_output = Command::new("uname")
+            .arg("-r")
+            .output()
             .context("Failed to get kernel version")?;
-        let kernel_version = String::from_utf8(kernel_output.stdout)?
-            .trim().to_string();
+        let kernel_version = String::from_utf8(kernel_output.stdout)?.trim().to_string();
 
         // Get CPU information
         let cpu_info = self.get_cpu_info().await;
@@ -387,11 +405,13 @@ impl NvidiaCore {
         let memory_info = self.get_memory_info().await;
 
         // Check if NVIDIA ML is available
-        let nvidia_ml_available = std::path::Path::new("/usr/lib/x86_64-linux-gnu/libnvidia-ml.so").exists() ||
-                                  std::path::Path::new("/usr/lib64/libnvidia-ml.so").exists();
+        let nvidia_ml_available = std::path::Path::new("/usr/lib/x86_64-linux-gnu/libnvidia-ml.so")
+            .exists()
+            || std::path::Path::new("/usr/lib64/libnvidia-ml.so").exists();
 
         // Find CUDA toolkit path
-        let cuda_toolkit_path = std::env::var("CUDA_HOME").ok()
+        let cuda_toolkit_path = std::env::var("CUDA_HOME")
+            .ok()
             .or_else(|| std::env::var("CUDA_PATH").ok())
             .or_else(|| {
                 if std::path::Path::new("/usr/local/cuda").exists() {
@@ -423,16 +443,14 @@ impl NvidiaCore {
 
             for line in output_text.lines() {
                 if line.starts_with("Model name:") {
-                    model_name = line.split(':').nth(1)
+                    model_name = line
+                        .split(':')
+                        .nth(1)
                         .unwrap_or("Unknown")
                         .trim()
                         .to_string();
                 } else if line.starts_with("CPU(s):") {
-                    if let Ok(cores) = line.split(':').nth(1)
-                        .unwrap_or("1")
-                        .trim()
-                        .parse::<u32>()
-                    {
+                    if let Ok(cores) = line.split(':').nth(1).unwrap_or("1").trim().parse::<u32>() {
                         cpu_cores = cores;
                     }
                 }
@@ -519,26 +537,29 @@ impl NvidiaCore {
             return Ok(());
         };
 
-        let total_gpu_memory_gb: f64 = devices.iter()
+        let total_gpu_memory_gb: f64 = devices
+            .iter()
             .map(|d| d.memory_total_mb as f64 / 1024.0)
             .sum();
 
-        let total_gpu_utilization: f64 = devices.iter()
+        let total_gpu_utilization: f64 = devices
+            .iter()
             .map(|d| d.utilization_gpu as f64)
-            .sum::<f64>() / devices.len() as f64;
+            .sum::<f64>()
+            / devices.len() as f64;
 
-        let total_power_draw_watts: u32 = devices.iter()
-            .map(|d| d.power_draw_watts)
-            .sum();
+        let total_power_draw_watts: u32 = devices.iter().map(|d| d.power_draw_watts).sum();
 
-        let max_temperature_celsius: u32 = devices.iter()
+        let max_temperature_celsius: u32 = devices
+            .iter()
             .map(|d| d.temperature_celsius)
             .max()
             .unwrap_or(0);
 
         // Get CUDA processes
         let cuda_processes = self.get_cuda_processes().await?;
-        let active_processes = cuda_processes.values()
+        let active_processes = cuda_processes
+            .values()
             .map(|procs| procs.len())
             .sum::<usize>() as u32;
 
@@ -549,7 +570,7 @@ impl NvidiaCore {
             total_power_draw_watts,
             max_temperature_celsius,
             active_processes,
-            cuda_context_count: 0, // Would need NVML integration
+            cuda_context_count: 0,             // Would need NVML integration
             memory_fragmentation_percent: 0.0, // Would need detailed analysis
         };
 
@@ -579,8 +600,9 @@ impl NvidiaCore {
         if let Ok(output) = output {
             if output.status.success() {
                 let output_text = String::from_utf8_lossy(&output.stdout);
-                
-                for line in output_text.lines().skip(2) { // Skip header lines
+
+                for line in output_text.lines().skip(2) {
+                    // Skip header lines
                     if line.trim().is_empty() || line.starts_with('#') {
                         continue;
                     }
@@ -590,9 +612,8 @@ impl NvidiaCore {
                         let device_id: u32 = fields[0].parse().unwrap_or(0);
                         let pid: u32 = fields[1].parse().unwrap_or(0);
                         let process_name = fields[3].to_string();
-                        let gpu_memory_usage = fields.get(4)
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(0);
+                        let gpu_memory_usage =
+                            fields.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
 
                         let process = CudaProcess {
                             pid,
@@ -600,10 +621,13 @@ impl NvidiaCore {
                             gpu_memory_usage_mb: gpu_memory_usage,
                             gpu_utilization_percent: 0, // Would need additional query
                             started_at: chrono::Utc::now(), // Would need process start time
-                            command_line: None, // Could get from /proc/{pid}/cmdline
+                            command_line: None,         // Could get from /proc/{pid}/cmdline
                         };
 
-                        processes.entry(device_id).or_insert_with(Vec::new).push(process);
+                        processes
+                            .entry(device_id)
+                            .or_insert_with(Vec::new)
+                            .push(process);
                     }
                 }
             }
@@ -616,10 +640,11 @@ impl NvidiaCore {
     /// Apply performance profile
     pub async fn apply_performance_profile(&self, profile_name: &str) -> Result<()> {
         let nvidia_info = self.nvidia_info.read().await;
-        let info = nvidia_info.as_ref()
-            .context("NVIDIA info not available")?;
+        let info = nvidia_info.as_ref().context("NVIDIA info not available")?;
 
-        let profile = info.performance_profiles.iter()
+        let profile = info
+            .performance_profiles
+            .iter()
             .find(|p| p.name == profile_name)
             .context("Performance profile not found")?;
 
@@ -632,12 +657,19 @@ impl NvidiaCore {
 
         *self.active_profile.write().await = Some(profile.clone());
 
-        info!("✅ Performance profile '{}' applied successfully", profile_name);
+        info!(
+            "✅ Performance profile '{}' applied successfully",
+            profile_name
+        );
         Ok(())
     }
 
     /// Apply profile to specific device
-    async fn apply_profile_to_device(&self, device_id: u32, profile: &PerformanceProfile) -> Result<()> {
+    async fn apply_profile_to_device(
+        &self,
+        device_id: u32,
+        profile: &PerformanceProfile,
+    ) -> Result<()> {
         // Set power limit
         if profile.power_limit_percent != 100 {
             let _ = Command::new("nvidia-smi")
@@ -705,10 +737,16 @@ impl NvidiaCore {
 
     /// Set thermal limit for device
     pub async fn set_thermal_limit(&self, device_id: u32, limit_celsius: u32) -> Result<()> {
-        info!("🌡️ Setting thermal limit for device {} to {}°C", device_id, limit_celsius);
-        
-        self.thermal_limits.write().await.insert(device_id, limit_celsius);
-        
+        info!(
+            "🌡️ Setting thermal limit for device {} to {}°C",
+            device_id, limit_celsius
+        );
+
+        self.thermal_limits
+            .write()
+            .await
+            .insert(device_id, limit_celsius);
+
         // Apply thermal limit via nvidia-smi
         let output = Command::new("nvidia-smi")
             .arg("-i")

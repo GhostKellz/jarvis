@@ -1,8 +1,8 @@
 use anyhow::Result;
-use std::env;
-use std::path::PathBuf;
 use git2::Repository;
 use jarvis_core::types::{GitContext, SystemInfo};
+use std::env;
+use std::path::PathBuf;
 
 pub struct Environment {
     pub working_directory: PathBuf,
@@ -61,15 +61,16 @@ async fn detect_git_context(working_dir: &PathBuf) -> Result<Option<GitContext>>
         Ok(repo) => {
             let head = repo.head()?;
             let branch_name = head.shorthand().unwrap_or("unknown").to_string();
-            
-            let repo_path = repo.workdir()
+
+            let repo_path = repo
+                .workdir()
                 .unwrap_or_else(|| repo.path())
                 .to_string_lossy()
                 .to_string();
-            
+
             let status = repo.statuses(None)?;
             let dirty = !status.is_empty();
-            
+
             let last_commit = if let Ok(commit) = head.peel_to_commit() {
                 commit.id().to_string()[..8].to_string()
             } else {
@@ -89,15 +90,15 @@ async fn detect_git_context(working_dir: &PathBuf) -> Result<Option<GitContext>>
 
 async fn detect_system_info() -> Result<SystemInfo> {
     use std::process::Command;
-    
+
     let hostname = hostname::get()?.to_string_lossy().to_string();
-    
+
     let kernel = Command::new("uname")
         .arg("-r")
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
-        
+
     let arch = Command::new("uname")
         .arg("-m")
         .output()
@@ -154,7 +155,7 @@ async fn detect_system_info() -> Result<SystemInfo> {
 
 async fn detect_dotfiles_path() -> Result<Option<PathBuf>> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not find home directory"))?;
-    
+
     // Common dotfiles locations
     let candidates = vec![
         home.join(".dotfiles"),
@@ -162,45 +163,46 @@ async fn detect_dotfiles_path() -> Result<Option<PathBuf>> {
         home.join(".config"),
         home.join("dev").join("dotfiles"),
     ];
-    
+
     for path in candidates {
         if path.exists() && path.is_dir() {
             // Check if it looks like a dotfiles repo
-            if path.join(".git").exists() || 
-               path.join("README.md").exists() ||
-               path.join("install.sh").exists() {
+            if path.join(".git").exists()
+                || path.join("README.md").exists()
+                || path.join("install.sh").exists()
+            {
                 return Ok(Some(path));
             }
         }
     }
-    
+
     Ok(None)
 }
 
 async fn detect_arch_info() -> Result<ArchInfo> {
     use std::process::Command;
-    
+
     let package_manager = if which::which("pacman").is_ok() {
         "pacman".to_string()
     } else {
         "unknown".to_string()
     };
-    
+
     let aur_helper = ["yay", "paru", "trizen", "aurman"]
         .iter()
         .find(|&&helper| which::which(helper).is_ok())
         .map(|s| s.to_string());
-    
+
     let kernel_version = Command::new("uname")
         .arg("-r")
         .output()
         .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
-    
+
     let desktop_environment = env::var("XDG_CURRENT_DESKTOP")
         .or_else(|_| env::var("DESKTOP_SESSION"))
         .ok();
-    
+
     Ok(ArchInfo {
         package_manager,
         aur_helper,

@@ -3,16 +3,16 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use jarvis_core::{Config, GhostChainClient, MemoryStore, LLMRouter};
+use jarvis_core::{Config, GhostChainClient, LLMRouter, MemoryStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
-use crate::blockchain_monitor::{BlockchainMonitorAgent, MonitoringConfig, MonitoringAlert};
-use crate::ai_analyzer::{AIBlockchainAnalyzer, AIAnalyzerConfig, AIAnalysisResult};
+use crate::ai_analyzer::{AIAnalysisResult, AIAnalyzerConfig, AIBlockchainAnalyzer};
+use crate::blockchain_monitor::{BlockchainMonitorAgent, MonitoringAlert, MonitoringConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStatus {
@@ -74,18 +74,18 @@ pub struct BlockchainAgentOrchestrator {
     grpc_client: GhostChainClient,
     memory: MemoryStore,
     llm_router: LLMRouter,
-    
+
     // Agent instances
     monitor_agent: Option<BlockchainMonitorAgent>,
     ai_analyzer: Option<AIBlockchainAnalyzer>,
-    
+
     // Communication channels
     message_sender: mpsc::UnboundedSender<AgentMessage>,
     message_receiver: Option<mpsc::UnboundedReceiver<AgentMessage>>,
-    
+
     // Agent status tracking
     agent_status: Arc<RwLock<HashMap<String, AgentStatus>>>,
-    
+
     // Task handles
     running_tasks: Vec<JoinHandle<()>>,
 }
@@ -98,7 +98,7 @@ impl BlockchainAgentOrchestrator {
         llm_router: LLMRouter,
     ) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
-        
+
         Self {
             config,
             grpc_client,
@@ -149,7 +149,8 @@ impl BlockchainAgentOrchestrator {
         );
 
         // Update status
-        self.update_agent_status("monitor", AgentState::Starting).await;
+        self.update_agent_status("monitor", AgentState::Starting)
+            .await;
 
         // Store the agent
         self.monitor_agent = Some(monitor);
@@ -172,7 +173,7 @@ impl BlockchainAgentOrchestrator {
             // Run monitoring with error handling
             if let Err(e) = agent.start_monitoring().await {
                 error!("Monitoring agent failed: {}", e);
-                
+
                 // Update status to error
                 {
                     let mut status = status_tracker.write().await;
@@ -183,7 +184,10 @@ impl BlockchainAgentOrchestrator {
                 }
 
                 // Send error message
-                let _ = sender.send(AgentMessage::StatusUpdate("monitor".to_string(), AgentState::Error));
+                let _ = sender.send(AgentMessage::StatusUpdate(
+                    "monitor".to_string(),
+                    AgentState::Error,
+                ));
             }
         });
 
@@ -196,13 +200,11 @@ impl BlockchainAgentOrchestrator {
         info!("Starting AI blockchain analyzer");
 
         let ai_config = AIAnalyzerConfig::default();
-        let analyzer = AIBlockchainAnalyzer::new(
-            self.llm_router.clone(),
-            self.memory.clone(),
-            ai_config,
-        );
+        let analyzer =
+            AIBlockchainAnalyzer::new(self.llm_router.clone(), self.memory.clone(), ai_config);
 
-        self.update_agent_status("ai_analyzer", AgentState::Running).await;
+        self.update_agent_status("ai_analyzer", AgentState::Running)
+            .await;
         self.ai_analyzer = Some(analyzer);
 
         Ok(())
@@ -210,28 +212,32 @@ impl BlockchainAgentOrchestrator {
 
     /// Start the message processing loop
     async fn start_message_processor(&mut self) -> Result<()> {
-        let mut receiver = self.message_receiver.take()
+        let mut receiver = self
+            .message_receiver
+            .take()
             .context("Message receiver already taken")?;
-        
+
         let analyzer = self.ai_analyzer.take();
         let status_tracker = self.agent_status.clone();
         let config = self.config.clone();
 
         let task = tokio::spawn(async move {
             let mut ai_analyzer = analyzer;
-            
+
             while let Some(message) = receiver.recv().await {
                 match message {
                     AgentMessage::Alert(alert) => {
                         info!("Processing alert: {}", alert.id);
-                        
+
                         // Process with AI analyzer if available
                         if let Some(ref mut analyzer) = ai_analyzer {
                             match analyzer.analyze_alert(&alert).await {
                                 Ok(analysis) => {
-                                    info!("AI analysis completed for alert {}: Risk Score {}", 
-                                          alert.id, analysis.risk_score);
-                                    
+                                    info!(
+                                        "AI analysis completed for alert {}: Risk Score {}",
+                                        alert.id, analysis.risk_score
+                                    );
+
                                     // Update metrics
                                     {
                                         let mut status = status_tracker.write().await;
@@ -249,7 +255,7 @@ impl BlockchainAgentOrchestrator {
                     }
                     AgentMessage::AnalysisRequest(request_type) => {
                         info!("Processing analysis request: {}", request_type);
-                        
+
                         if let Some(ref mut analyzer) = ai_analyzer {
                             let result = match request_type.as_str() {
                                 "patterns" => analyzer.analyze_patterns(24).await,
@@ -272,9 +278,11 @@ impl BlockchainAgentOrchestrator {
                     }
                     AgentMessage::StatusUpdate(agent_name, new_status) => {
                         info!("Status update for {}: {:?}", agent_name, new_status);
-                        
+
                         // Handle failed agents
-                        if matches!(new_status, AgentState::Error) && config.auto_restart_failed_agents {
+                        if matches!(new_status, AgentState::Error)
+                            && config.auto_restart_failed_agents
+                        {
                             warn!("Agent {} failed, considering restart", agent_name);
                             // Restart logic would go here
                         }
@@ -297,29 +305,37 @@ impl BlockchainAgentOrchestrator {
         let interval_minutes = self.config.status_report_interval_minutes;
 
         let task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval_minutes as u64 * 60)
-            );
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval_minutes as u64 * 60));
 
             loop {
                 interval.tick().await;
-                
+
                 let status = status_tracker.read().await;
                 let active_agents = status.len();
-                let running_agents = status.values()
+                let running_agents = status
+                    .values()
                     .filter(|s| matches!(s.status, AgentState::Running))
                     .count();
-                let error_agents = status.values()
+                let error_agents = status
+                    .values()
                     .filter(|s| matches!(s.status, AgentState::Error))
                     .count();
 
-                info!("Agent Status Report: {} total, {} running, {} errors", 
-                      active_agents, running_agents, error_agents);
+                info!(
+                    "Agent Status Report: {} total, {} running, {} errors",
+                    active_agents, running_agents, error_agents
+                );
 
                 // Log individual agent status
                 for (name, agent_status) in status.iter() {
-                    debug!("Agent {}: {:?}, last activity: {}, errors: {}", 
-                           name, agent_status.status, agent_status.last_activity, agent_status.error_count);
+                    debug!(
+                        "Agent {}: {:?}, last activity: {}, errors: {}",
+                        name,
+                        agent_status.status,
+                        agent_status.last_activity,
+                        agent_status.error_count
+                    );
                 }
             }
         });
@@ -331,19 +347,21 @@ impl BlockchainAgentOrchestrator {
     /// Update agent status
     async fn update_agent_status(&self, agent_name: &str, state: AgentState) {
         let mut status = self.agent_status.write().await;
-        
-        let agent_status = status.entry(agent_name.to_string()).or_insert_with(|| AgentStatus {
-            agent_name: agent_name.to_string(),
-            status: state.clone(),
-            last_activity: Utc::now(),
-            metrics: AgentMetrics {
-                uptime_seconds: 0,
-                tasks_completed: 0,
-                alerts_processed: 0,
-                ai_analyses_performed: 0,
-            },
-            error_count: 0,
-        });
+
+        let agent_status = status
+            .entry(agent_name.to_string())
+            .or_insert_with(|| AgentStatus {
+                agent_name: agent_name.to_string(),
+                status: state.clone(),
+                last_activity: Utc::now(),
+                metrics: AgentMetrics {
+                    uptime_seconds: 0,
+                    tasks_completed: 0,
+                    alerts_processed: 0,
+                    ai_analyses_performed: 0,
+                },
+                error_count: 0,
+            });
 
         agent_status.status = state;
         agent_status.last_activity = Utc::now();
@@ -351,7 +369,8 @@ impl BlockchainAgentOrchestrator {
 
     /// Send a message to the agent system
     pub async fn send_message(&self, message: AgentMessage) -> Result<()> {
-        self.message_sender.send(message)
+        self.message_sender
+            .send(message)
             .context("Failed to send message to agent system")?;
         Ok(())
     }
@@ -363,27 +382,29 @@ impl BlockchainAgentOrchestrator {
 
     /// Request AI analysis
     pub async fn request_analysis(&self, analysis_type: &str) -> Result<()> {
-        self.send_message(AgentMessage::AnalysisRequest(analysis_type.to_string())).await
+        self.send_message(AgentMessage::AnalysisRequest(analysis_type.to_string()))
+            .await
     }
 
     /// Get comprehensive system health report
     pub async fn get_system_health(&self) -> Result<serde_json::Value> {
         let agent_status = self.get_agent_status().await;
-        
+
         let total_agents = agent_status.len();
-        let healthy_agents = agent_status.values()
+        let healthy_agents = agent_status
+            .values()
             .filter(|s| matches!(s.status, AgentState::Running))
             .count();
-        
-        let total_errors = agent_status.values()
-            .map(|s| s.error_count)
-            .sum::<u32>();
 
-        let total_alerts_processed = agent_status.values()
+        let total_errors = agent_status.values().map(|s| s.error_count).sum::<u32>();
+
+        let total_alerts_processed = agent_status
+            .values()
             .map(|s| s.metrics.alerts_processed)
             .sum::<u32>();
 
-        let total_ai_analyses = agent_status.values()
+        let total_ai_analyses = agent_status
+            .values()
             .map(|s| s.metrics.ai_analyses_performed)
             .sum::<u32>();
 
@@ -425,16 +446,18 @@ impl BlockchainAgentOrchestrator {
     /// Create orchestrator from Jarvis config
     pub async fn from_config(config: &Config) -> Result<Self> {
         // Create gRPC client
-        let ghost_config = config.blockchain.as_ref()
+        let ghost_config = config
+            .blockchain
+            .as_ref()
             .and_then(|bc| bc.ghostchain.as_ref())
             .cloned()
             .unwrap_or_default();
-        
+
         let grpc_client = GhostChainClient::new(ghost_config.into()).await?;
-        
+
         // Initialize memory store
         let memory = MemoryStore::new(&config.database_path).await?;
-        
+
         // Initialize LLM router
         let llm_router = LLMRouter::new(config).await?;
 
@@ -447,6 +470,11 @@ impl BlockchainAgentOrchestrator {
             status_report_interval_minutes: 15,
         };
 
-        Ok(Self::new(orchestrator_config, grpc_client, memory, llm_router))
+        Ok(Self::new(
+            orchestrator_config,
+            grpc_client,
+            memory,
+            llm_router,
+        ))
     }
 }

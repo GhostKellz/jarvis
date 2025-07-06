@@ -1,9 +1,9 @@
 /*!
  * Jarvis Daemon (jarvisd) - Autonomous Blockchain Agent Service
- * 
+ *
  * This is the daemon variant of Jarvis that runs as a background service
  * for hands-free blockchain monitoring, analysis, and automated responses.
- * 
+ *
  * Features:
  * - Autonomous blockchain monitoring across multiple networks
  * - AI-powered analysis and anomaly detection
@@ -18,20 +18,20 @@
 
 use anyhow::{Context, Result};
 use clap::{Arg, Command};
-use jarvis_core::{
-    config::Config,
-    memory::MemoryStore,
-    grpc_client::GhostChainClient,
-    llm::LLMRouter,
-};
 use jarvis_agent::{
+    ai_analyzer::{AIAnalyzerConfig, AIBlockchainAnalyzer},
     blockchain_monitor::{BlockchainMonitorAgent, MonitoringConfig},
-    ai_analyzer::{AIBlockchainAnalyzer, AIAnalyzerConfig},
     orchestrator::{BlockchainAgentOrchestrator, OrchestratorConfig},
+};
+use jarvis_core::{
+    config::Config, grpc_client::GhostChainClient, llm::LLMRouter, memory::MemoryStore,
 };
 use std::{
     path::PathBuf,
-    sync::{Arc, atomic::{AtomicBool, Ordering}},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tokio::{
@@ -39,7 +39,7 @@ use tokio::{
     sync::RwLock,
     time::{interval, sleep},
 };
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 
 /// Daemon configuration and runtime state
 struct JarvisDaemon {
@@ -57,10 +57,12 @@ impl JarvisDaemon {
 
         // Load configuration
         let config = if let Some(path) = config_path {
-            Config::load(Some(path.to_str().unwrap())).await
+            Config::load(Some(path.to_str().unwrap()))
+                .await
                 .with_context(|| format!("Failed to load config from {:?}", path))?
         } else {
-            Config::load(None).await
+            Config::load(None)
+                .await
                 .context("Failed to load default config")?
         };
 
@@ -68,7 +70,7 @@ impl JarvisDaemon {
         let memory_store = Arc::new(
             MemoryStore::new(&config.database_path)
                 .await
-                .context("Failed to initialize memory store")?
+                .context("Failed to initialize memory store")?,
         );
 
         // Create gRPC client
@@ -99,7 +101,7 @@ impl JarvisDaemon {
             packet_loss_threshold: 5.0,
             enable_ai_analysis: true,
         };
-        
+
         let monitor_agent = BlockchainMonitorAgent::new(
             grpc_client.clone(),
             (*memory_store).clone(),
@@ -117,12 +119,9 @@ impl JarvisDaemon {
             enable_automated_actions: false,
             max_analysis_history: 1000,
         };
-        
-        let ai_analyzer = AIBlockchainAnalyzer::new(
-            llm_router.clone(),
-            (*memory_store).clone(),
-            ai_config,
-        );
+
+        let ai_analyzer =
+            AIBlockchainAnalyzer::new(llm_router.clone(), (*memory_store).clone(), ai_config);
 
         // Create orchestrator config
         let orchestrator_config = OrchestratorConfig {
@@ -134,14 +133,12 @@ impl JarvisDaemon {
         };
 
         // Create orchestrator
-        let orchestrator = Arc::new(RwLock::new(
-            BlockchainAgentOrchestrator::new(
-                orchestrator_config,
-                grpc_client,
-                (*memory_store).clone(),
-                llm_router,
-            )
-        ));
+        let orchestrator = Arc::new(RwLock::new(BlockchainAgentOrchestrator::new(
+            orchestrator_config,
+            grpc_client,
+            (*memory_store).clone(),
+            llm_router,
+        )));
 
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
@@ -167,7 +164,9 @@ impl JarvisDaemon {
         // Start the orchestrator
         {
             let mut orchestrator = self.orchestrator.write().await;
-            orchestrator.start().await
+            orchestrator
+                .start()
+                .await
                 .context("Failed to start agent orchestrator")?;
         }
 
@@ -189,7 +188,9 @@ impl JarvisDaemon {
         // Stop the orchestrator
         {
             let mut orchestrator = self.orchestrator.write().await;
-            orchestrator.shutdown().await
+            orchestrator
+                .shutdown()
+                .await
                 .context("Failed to shutdown agent orchestrator")?;
         }
 
@@ -314,7 +315,7 @@ impl JarvisDaemon {
 
         // Clean up old memory entries - simplified since we don't have this method
         // We could implement this by querying old entries and removing them manually
-        
+
         // Clean up temporary files
         if let Some(temp_dir) = self.get_temp_dir().await {
             if let Err(e) = self.cleanup_temp_files(&temp_dir).await {
@@ -354,11 +355,11 @@ impl JarvisDaemon {
         }
 
         let cutoff = std::time::SystemTime::now() - Duration::from_secs(24 * 3600);
-        
+
         for entry in std::fs::read_dir(temp_dir)? {
             let entry = entry?;
             let metadata = entry.metadata()?;
-            
+
             if let Ok(modified) = metadata.modified() {
                 if modified < cutoff {
                     let path = entry.path();
@@ -379,19 +380,16 @@ async fn get_daemon_status(pid_file: &PathBuf) -> Result<DaemonStatus> {
         return Ok(DaemonStatus::Stopped);
     }
 
-    let pid_str = std::fs::read_to_string(pid_file)
-        .context("Failed to read PID file")?;
-    
-    let pid: u32 = pid_str.trim().parse()
-        .context("Invalid PID in PID file")?;
+    let pid_str = std::fs::read_to_string(pid_file).context("Failed to read PID file")?;
+
+    let pid: u32 = pid_str.trim().parse().context("Invalid PID in PID file")?;
 
     // Check if process is still running
     if is_process_running(pid) {
         Ok(DaemonStatus::Running(pid))
     } else {
         // Clean up stale PID file
-        std::fs::remove_file(pid_file)
-            .context("Failed to remove stale PID file")?;
+        std::fs::remove_file(pid_file).context("Failed to remove stale PID file")?;
         Ok(DaemonStatus::Stopped)
     }
 }
@@ -399,7 +397,7 @@ async fn get_daemon_status(pid_file: &PathBuf) -> Result<DaemonStatus> {
 /// Check if a process is running
 fn is_process_running(pid: u32) -> bool {
     use std::process::Command;
-    
+
     #[cfg(unix)]
     {
         Command::new("kill")
@@ -408,14 +406,16 @@ fn is_process_running(pid: u32) -> bool {
             .map(|output| output.status.success())
             .unwrap_or(false)
     }
-    
+
     #[cfg(not(unix))]
     {
         // For non-Unix systems, use a different approach
-        use sysinfo::{System, SystemExt, ProcessExt};
+        use sysinfo::{ProcessExt, System, SystemExt};
         let mut system = System::new_all();
         system.refresh_processes();
-        system.processes().contains_key(&sysinfo::Pid::from(pid as usize))
+        system
+            .processes()
+            .contains_key(&sysinfo::Pid::from(pid as usize))
     }
 }
 
@@ -431,7 +431,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             std::env::var("RUST_LOG")
-                .unwrap_or_else(|_| "jarvisd=info,jarvis_core=info,jarvis_agent=info".to_string())
+                .unwrap_or_else(|_| "jarvisd=info,jarvis_core=info,jarvis_agent=info".to_string()),
         )
         .init();
 
@@ -444,7 +444,7 @@ async fn main() -> Result<()> {
                 .short('c')
                 .long("config")
                 .value_name("FILE")
-                .help("Configuration file path")
+                .help("Configuration file path"),
         )
         .arg(
             Arg::new("pid-file")
@@ -452,41 +452,27 @@ async fn main() -> Result<()> {
                 .long("pid-file")
                 .value_name("FILE")
                 .help("PID file path")
-                .default_value("/var/run/jarvisd.pid")
+                .default_value("/var/run/jarvisd.pid"),
         )
         .arg(
             Arg::new("daemon")
                 .short('d')
                 .long("daemon")
                 .help("Run as daemon (detach from terminal)")
-                .action(clap::ArgAction::SetTrue)
+                .action(clap::ArgAction::SetTrue),
         )
+        .subcommand(Command::new("start").about("Start the daemon service"))
+        .subcommand(Command::new("stop").about("Stop the daemon service"))
+        .subcommand(Command::new("restart").about("Restart the daemon service"))
+        .subcommand(Command::new("status").about("Show daemon status"))
         .subcommand(
-            Command::new("start")
-                .about("Start the daemon service")
-        )
-        .subcommand(
-            Command::new("stop")
-                .about("Stop the daemon service")
-        )
-        .subcommand(
-            Command::new("restart")
-                .about("Restart the daemon service")
-        )
-        .subcommand(
-            Command::new("status")
-                .about("Show daemon status")
-        )
-        .subcommand(
-            Command::new("logs")
-                .about("Show daemon logs")
-                .arg(
-                    Arg::new("follow")
-                        .short('f')
-                        .long("follow")
-                        .help("Follow log output")
-                        .action(clap::ArgAction::SetTrue)
-                )
+            Command::new("logs").about("Show daemon logs").arg(
+                Arg::new("follow")
+                    .short('f')
+                    .long("follow")
+                    .help("Follow log output")
+                    .action(clap::ArgAction::SetTrue),
+            ),
         )
         .get_matches();
 
@@ -497,7 +483,7 @@ async fn main() -> Result<()> {
     match matches.subcommand() {
         Some(("start", _)) => {
             info!("Starting Jarvis Daemon...");
-            
+
             // Check if already running
             match get_daemon_status(&pid_file).await? {
                 DaemonStatus::Running(pid) => {
@@ -514,7 +500,7 @@ async fn main() -> Result<()> {
 
         Some(("stop", _)) => {
             info!("Stopping Jarvis Daemon...");
-            
+
             match get_daemon_status(&pid_file).await? {
                 DaemonStatus::Running(pid) => {
                     // Send SIGTERM to the process
@@ -525,13 +511,13 @@ async fn main() -> Result<()> {
                             .args(["-TERM", &pid.to_string()])
                             .output()
                             .context("Failed to send SIGTERM")?;
-                        
+
                         if !output.status.success() {
                             eprintln!("Failed to stop daemon");
                             std::process::exit(1);
                         }
                     }
-                    
+
                     println!("Daemon stopped successfully");
                 }
                 DaemonStatus::Stopped => {
@@ -542,7 +528,7 @@ async fn main() -> Result<()> {
 
         Some(("restart", _)) => {
             info!("Restarting Jarvis Daemon...");
-            
+
             // Stop if running
             if let DaemonStatus::Running(pid) = get_daemon_status(&pid_file).await? {
                 #[cfg(unix)]
@@ -552,11 +538,11 @@ async fn main() -> Result<()> {
                         .args(["-TERM", &pid.to_string()])
                         .output();
                 }
-                
+
                 // Wait a bit for graceful shutdown
                 tokio::time::sleep(Duration::from_secs(3)).await;
             }
-            
+
             // Start the daemon
             let daemon = JarvisDaemon::new(config_path, Some(pid_file)).await?;
             daemon.start().await?;
@@ -566,7 +552,7 @@ async fn main() -> Result<()> {
             match get_daemon_status(&pid_file).await? {
                 DaemonStatus::Running(pid) => {
                     println!("Jarvis Daemon is running (PID: {})", pid);
-                    
+
                     // TODO: Add more detailed status information
                     // - Uptime
                     // - Agent status

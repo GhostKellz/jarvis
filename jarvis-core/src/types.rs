@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
@@ -96,7 +96,7 @@ impl Default for Environment {
     fn default() -> Self {
         Self {
             os_type: "linux".to_string(),
-            hostname: "localhost".to_string(), 
+            hostname: "localhost".to_string(),
             working_directory: "/tmp".to_string(),
         }
     }

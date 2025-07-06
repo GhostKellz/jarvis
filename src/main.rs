@@ -1,9 +1,9 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use jarvis_core::{config::Config, llm::LLMRouter, memory::MemoryStore};
 use jarvis_agent::AgentRunner;
+use jarvis_core::{config::Config, llm::LLMRouter, memory::MemoryStore};
 use jarvis_shell::Environment;
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber;
 
 mod commands;
@@ -16,10 +16,10 @@ use commands::{BlockchainCommands, handle_blockchain_command};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
-    
+
     #[arg(short, long, global = true)]
     verbose: bool,
-    
+
     #[arg(short, long, global = true)]
     config: Option<String>,
 }
@@ -82,9 +82,7 @@ enum TrainCommands {
     /// List available models
     List,
     /// Load a specific model
-    Load {
-        model_name: String,
-    },
+    Load { model_name: String },
 }
 
 #[derive(Subcommand)]
@@ -94,24 +92,23 @@ enum ConfigCommands {
     /// Initialize configuration
     Init,
     /// Set configuration values
-    Set {
-        key: String,
-        value: String,
-    },
+    Set { key: String, value: String },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    
+
     // Initialize logging
-    let level = if cli.verbose { Level::DEBUG } else { Level::INFO };
-    tracing_subscriber::fmt()
-        .with_max_level(level)
-        .init();
-        
+    let level = if cli.verbose {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+    tracing_subscriber::fmt().with_max_level(level).init();
+
     info!("🤖 Jarvis starting up...");
-    
+
     // Handle config commands before initializing other components
     match &cli.command {
         Commands::Config { action } => {
@@ -133,16 +130,16 @@ async fn main() -> Result<()> {
         }
         _ => {}
     }
-    
+
     // Load configuration for other commands
     let config = Config::load(cli.config.as_deref()).await?;
-    
+
     // Initialize core components
     let memory = MemoryStore::new(&config.database_path).await?;
     let llm_router = LLMRouter::new(&config).await?;
     let environment = Environment::detect().await?;
     let agent_runner = AgentRunner::new(memory.clone(), llm_router.clone()).await?;
-    
+
     // Route commands
     match cli.command {
         Commands::Explain { query } => {
@@ -170,21 +167,25 @@ async fn main() -> Result<()> {
             info!("🔧 Fixing: {}", issue_str);
             agent_runner.fix_issue(&issue_str, &environment).await?;
         }
-        Commands::Train { action } => {
-            match action {
-                TrainCommands::Start { data_path, model_name } => {
-                    info!("🧠 Starting training: {} with data from {}", model_name, data_path);
-                    agent_runner.train_model(&model_name, &data_path).await?;
-                }
-                TrainCommands::List => {
-                    agent_runner.list_models().await?;
-                }
-                TrainCommands::Load { model_name } => {
-                    info!("📥 Loading model: {}", model_name);
-                    agent_runner.load_model(&model_name).await?;
-                }
+        Commands::Train { action } => match action {
+            TrainCommands::Start {
+                data_path,
+                model_name,
+            } => {
+                info!(
+                    "🧠 Starting training: {} with data from {}",
+                    model_name, data_path
+                );
+                agent_runner.train_model(&model_name, &data_path).await?;
             }
-        }
+            TrainCommands::List => {
+                agent_runner.list_models().await?;
+            }
+            TrainCommands::Load { model_name } => {
+                info!("📥 Loading model: {}", model_name);
+                agent_runner.load_model(&model_name).await?;
+            }
+        },
         Commands::Chat => {
             info!("💬 Entering interactive chat mode...");
             agent_runner.interactive_chat(&environment).await?;
@@ -197,6 +198,6 @@ async fn main() -> Result<()> {
             handle_blockchain_command(blockchain_command, &config).await?;
         }
     }
-    
+
     Ok(())
 }

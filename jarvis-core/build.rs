@@ -2,11 +2,11 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compile GhostChain gRPC protocol definitions
     tonic_build::configure()
-        .build_server(false)  // We're only a client
+        .build_server(false) // We're only a client
         .compile(
             &[
                 "proto/ghostchain/blockchain.proto",
-                "proto/ghostchain/transaction.proto", 
+                "proto/ghostchain/transaction.proto",
                 "proto/ghostchain/network.proto",
             ],
             &["proto/ghostchain"],

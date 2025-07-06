@@ -1,20 +1,22 @@
 /*!
  * Web5 Stack Integration for JARVIS-NV
- * 
+ *
  * Handles IPv6, QUIC, HTTP/3, and Web5 protocol stack integration
  * for modern, high-performance blockchain networking.
  */
 
 use anyhow::{Context, Result};
+use quinn::{ClientConfig, Connection, Endpoint, ServerConfig};
+use rustls::{
+    Certificate, ClientConfig as RustlsClientConfig, PrivateKey, ServerConfig as RustlsServerConfig,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, warn, error, debug};
-use quinn::{Endpoint, ClientConfig, ServerConfig, Connection};
-use rustls::{Certificate, PrivateKey, ServerConfig as RustlsServerConfig, ClientConfig as RustlsClientConfig};
+use tracing::{debug, error, info, warn};
 
 use crate::config::Web5Config;
 
@@ -89,23 +91,23 @@ pub struct NetworkOptimization {
 
 pub struct Web5Stack {
     config: Web5Config,
-    
+
     // Network endpoints
     quic_endpoint: Arc<RwLock<Option<Arc<Endpoint>>>>,
     http3_server: Arc<RwLock<Option<Arc<tokio::task::JoinHandle<()>>>>>,
-    
+
     // Connection tracking
     active_connections: Arc<RwLock<HashMap<String, ConnectionMetrics>>>,
     request_history: Arc<Mutex<Vec<Web5Request>>>,
-    
+
     // Performance optimization
     network_optimizations: Arc<Mutex<Vec<NetworkOptimization>>>,
     congestion_control_state: Arc<RwLock<CongestionControlState>>,
-    
+
     // Metrics
     web5_status: Arc<RwLock<Web5Status>>,
     protocol_stats: Arc<RwLock<ProtocolStats>>,
-    
+
     // Runtime state
     is_running: Arc<RwLock<bool>>,
     start_time: Instant,
@@ -200,7 +202,7 @@ impl Web5Stack {
     /// Start Web5 stack services
     pub async fn start(&self) -> Result<()> {
         info!("🚀 Starting Web5 Stack...");
-        
+
         if !self.config.enabled {
             info!("⏭️ Web5 Stack is disabled, skipping startup");
             return Ok(());
@@ -232,14 +234,14 @@ impl Web5Stack {
     /// Stop Web5 stack services
     pub async fn stop(&self) -> Result<()> {
         info!("🛑 Stopping Web5 Stack...");
-        
+
         *self.is_running.write().await = false;
 
         // Close QUIC endpoint
         {
             let endpoint_guard = self.quic_endpoint.read().await;
             if let Some(ref endpoint) = *endpoint_guard {
-                endpoint.close(0u32.into(), b"shutdown");
+                endpoint.close(0u32.into(), b"shutdown".as_ref());
             }
         }
 
@@ -286,11 +288,11 @@ impl Web5Stack {
     async fn check_ipv6_availability() -> bool {
         use std::net::TcpStream;
         use std::time::Duration as StdDuration;
-        
+
         // Try to connect to an IPv6 address (Google's public DNS)
         match std::net::TcpStream::connect_timeout(
             &"[2001:4860:4860::8888]:53".parse().unwrap(),
-            StdDuration::from_secs(5)
+            StdDuration::from_secs(5),
         ) {
             Ok(_) => {
                 debug!("✅ IPv6 connectivity available");
@@ -308,13 +310,13 @@ impl Web5Stack {
         info!("🚀 Starting QUIC endpoint...");
 
         let bind_addr = self.parse_bind_address()?;
-        
+
         // Create server configuration
         let server_config = self.create_quic_server_config().await?;
-        
+
         // Create QUIC endpoint
-        let endpoint = Endpoint::server(server_config, bind_addr)
-            .context("Failed to create QUIC endpoint")?;
+        let endpoint =
+            Endpoint::server(server_config, bind_addr).context("Failed to create QUIC endpoint")?;
 
         info!("🌐 QUIC endpoint listening on {}", bind_addr);
 
@@ -329,11 +331,16 @@ impl Web5Stack {
                 if let Some(connecting) = endpoint_clone.accept().await {
                     let connections = Arc::clone(&connections);
                     let protocol_stats = Arc::clone(&protocol_stats);
-                    
+
                     tokio::spawn(async move {
                         match connecting.await {
                             Ok(connection) => {
-                                Self::handle_quic_connection(connection, connections, protocol_stats).await;
+                                Self::handle_quic_connection(
+                                    connection,
+                                    connections,
+                                    protocol_stats,
+                                )
+                                .await;
                             }
                             Err(e) => {
                                 error!("❌ Failed to establish QUIC connection: {}", e);
@@ -355,16 +362,16 @@ impl Web5Stack {
 
         // HTTP/3 would be built on top of QUIC
         // For now, we'll simulate HTTP/3 functionality
-        
+
         let is_running = Arc::clone(&self.is_running);
         let web5_status = Arc::clone(&self.web5_status);
 
         let server_handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
-                
+
                 // Simulate HTTP/3 activity
                 let mut status = web5_status.write().await;
                 status.total_requests += 10; // Simulate requests
@@ -385,7 +392,10 @@ impl Web5Stack {
             SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), self.config.port)
         } else if self.config.bind_address == "0.0.0.0" {
             // IPv4 any address
-            SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED), self.config.port)
+            SocketAddr::new(
+                IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+                self.config.port,
+            )
         } else {
             // Parse specific address
             format!("{}:{}", self.config.bind_address, self.config.port)
@@ -413,24 +423,29 @@ impl Web5Stack {
             .map_err(|e| anyhow::anyhow!("Failed to create TLS config: {}", e))?;
 
         // Configure ALPN protocols for HTTP/3 and QUIC
-        rustls_config.alpn_protocols = self.config.tls.alpn_protocols.iter()
+        rustls_config.alpn_protocols = self
+            .config
+            .tls
+            .alpn_protocols
+            .iter()
             .map(|p| p.as_bytes().to_vec())
             .collect();
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(rustls_config));
-        
+
         // Configure transport parameters
         let mut transport_config = quinn::TransportConfig::default();
-        
+
         transport_config.max_concurrent_uni_streams(self.config.transport.max_uni_streams.into());
         transport_config.max_concurrent_bidi_streams(self.config.transport.max_bi_streams.into());
         transport_config.max_idle_timeout(Some(
-            Duration::from_millis(self.config.transport.max_idle_timeout_ms).try_into()
-                .context("Invalid idle timeout")?
+            Duration::from_millis(self.config.transport.max_idle_timeout_ms)
+                .try_into()
+                .context("Invalid idle timeout")?,
         ));
-        transport_config.keep_alive_interval(Some(
-            Duration::from_millis(self.config.transport.keep_alive_interval_ms)
-        ));
+        transport_config.keep_alive_interval(Some(Duration::from_millis(
+            self.config.transport.keep_alive_interval_ms,
+        )));
 
         // Set congestion control algorithm
         match self.config.transport.congestion_control.as_str() {
@@ -445,7 +460,10 @@ impl Web5Stack {
                 debug!("🚦 Using New Reno congestion control");
             }
             _ => {
-                warn!("⚠️ Unknown congestion control algorithm: {}", self.config.transport.congestion_control);
+                warn!(
+                    "⚠️ Unknown congestion control algorithm: {}",
+                    self.config.transport.congestion_control
+                );
             }
         }
 
@@ -462,9 +480,14 @@ impl Web5Stack {
     ) {
         let connection_id = uuid::Uuid::new_v4().to_string();
         let remote_addr = connection.remote_address();
-        let local_addr = connection.local_ip().unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED));
+        let local_addr = connection
+            .local_ip()
+            .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED));
 
-        info!("🔗 New QUIC connection: {} from {}", connection_id, remote_addr);
+        info!(
+            "🔗 New QUIC connection: {} from {}",
+            connection_id, remote_addr
+        );
 
         // Create connection metrics
         let metrics = ConnectionMetrics {
@@ -482,7 +505,10 @@ impl Web5Stack {
             is_ipv6: remote_addr.is_ipv6(),
         };
 
-        connections.write().await.insert(connection_id.clone(), metrics);
+        connections
+            .write()
+            .await
+            .insert(connection_id.clone(), metrics);
 
         // Update protocol stats
         {
@@ -494,9 +520,11 @@ impl Web5Stack {
         while let Ok((send, recv)) = connection.accept_bi().await {
             let connection_id = connection_id.clone();
             let connections = Arc::clone(&connections);
-            
+
             tokio::spawn(async move {
-                if let Err(e) = Self::handle_quic_stream(send, recv, &connection_id, &connections).await {
+                if let Err(e) =
+                    Self::handle_quic_stream(send, recv, &connection_id, &connections).await
+                {
                     error!("❌ Error handling QUIC stream: {}", e);
                 }
             });
@@ -518,9 +546,10 @@ impl Web5Stack {
         let mut buffer = Vec::new();
         while let Some(chunk) = recv.read_chunk(8192, false).await? {
             buffer.extend_from_slice(&chunk.bytes);
-            
+
             // Limit buffer size to prevent memory exhaustion
-            if buffer.len() > 1024 * 1024 { // 1MB limit
+            if buffer.len() > 1024 * 1024 {
+                // 1MB limit
                 break;
             }
         }
@@ -537,7 +566,7 @@ impl Web5Stack {
         });
 
         let response_data = serde_json::to_vec(&response)?;
-        
+
         // Send response
         send.write_all(&response_data).await?;
         send.finish().await?;
@@ -561,13 +590,13 @@ impl Web5Stack {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
                 let connections = active_connections.read().await;
                 let connection_count = connections.len() as u32;
-                
+
                 // Calculate average latency
                 let avg_latency = if !connections.is_empty() {
                     connections.values().map(|c| c.rtt_ms).sum::<f64>() / connections.len() as f64
@@ -586,7 +615,7 @@ impl Web5Stack {
                 {
                     let mut cc_state = congestion_control_state.write().await;
                     cc_state.rtt_estimate_ms = avg_latency;
-                    
+
                     // Estimate bandwidth based on active connections
                     let estimated_bandwidth = if connection_count > 0 {
                         100.0 * (1.0 + connection_count as f64 * 0.1)
@@ -596,8 +625,10 @@ impl Web5Stack {
                     cc_state.bandwidth_estimate_mbps = estimated_bandwidth;
                 }
 
-                debug!("📊 Network monitoring: {} active connections, {:.2}ms avg latency", 
-                       connection_count, avg_latency);
+                debug!(
+                    "📊 Network monitoring: {} active connections, {:.2}ms avg latency",
+                    connection_count, avg_latency
+                );
             }
         })
     }
@@ -610,16 +641,16 @@ impl Web5Stack {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
                 let cc_state = congestion_control_state.read().await;
-                
+
                 // Check if optimization is needed
                 if cc_state.rtt_estimate_ms > 100.0 || cc_state.packet_loss_events > 10 {
                     debug!("🔧 Network performance degradation detected, optimizing...");
-                    
+
                     let optimization = NetworkOptimization {
                         optimization_type: "congestion_control".to_string(),
                         target_metric: "latency".to_string(),
@@ -633,7 +664,7 @@ impl Web5Stack {
 
                     let mut optimizations = network_optimizations.lock().await;
                     optimizations.push(optimization);
-                    
+
                     // Keep only recent optimizations
                     if optimizations.len() > 100 {
                         optimizations.drain(0..50);
@@ -651,22 +682,29 @@ impl Web5Stack {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
                 // Update protocol distribution
                 let stats = protocol_stats.read().await;
-                let total_requests = stats.http1_1_requests + stats.http2_requests + stats.http3_requests;
-                
+                let total_requests =
+                    stats.http1_1_requests + stats.http2_requests + stats.http3_requests;
+
                 if total_requests > 0 {
                     let mut status = web5_status.write().await;
                     status.protocol_distribution = ProtocolDistribution {
-                        http1_1_percent: (stats.http1_1_requests as f64 / total_requests as f64) * 100.0,
-                        http2_percent: (stats.http2_requests as f64 / total_requests as f64) * 100.0,
-                        http3_percent: (stats.http3_requests as f64 / total_requests as f64) * 100.0,
-                        quic_percent: (stats.quic_connections as f64 / total_requests as f64) * 100.0,
-                        websocket_percent: (stats.websocket_connections as f64 / total_requests as f64) * 100.0,
+                        http1_1_percent: (stats.http1_1_requests as f64 / total_requests as f64)
+                            * 100.0,
+                        http2_percent: (stats.http2_requests as f64 / total_requests as f64)
+                            * 100.0,
+                        http3_percent: (stats.http3_requests as f64 / total_requests as f64)
+                            * 100.0,
+                        quic_percent: (stats.quic_connections as f64 / total_requests as f64)
+                            * 100.0,
+                        websocket_percent: (stats.websocket_connections as f64
+                            / total_requests as f64)
+                            * 100.0,
                     };
                 }
             }
@@ -740,19 +778,19 @@ impl Web5Stack {
     /// Enable/disable IPv6 preference
     pub async fn set_ipv6_preference(&self, enabled: bool) -> Result<()> {
         info!("🔧 Setting IPv6 preference: {}", enabled);
-        
+
         let mut status = self.web5_status.write().await;
         status.ipv6_preferred = enabled;
-        
+
         // In a real implementation, this would reconfigure the network stack
-        
+
         Ok(())
     }
 
     /// Update congestion control algorithm
     pub async fn set_congestion_control(&self, algorithm: &str) -> Result<()> {
         info!("🚦 Setting congestion control algorithm: {}", algorithm);
-        
+
         let valid_algorithms = ["cubic", "bbr", "newreno"];
         if !valid_algorithms.contains(&algorithm) {
             anyhow::bail!("Invalid congestion control algorithm: {}", algorithm);
@@ -761,9 +799,9 @@ impl Web5Stack {
         let mut cc_state = self.congestion_control_state.write().await;
         cc_state.algorithm = algorithm.to_string();
         cc_state.last_optimization = Some(Instant::now());
-        
+
         // In a real implementation, this would reconfigure QUIC transport
-        
+
         Ok(())
     }
 }

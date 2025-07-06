@@ -1,20 +1,20 @@
 /*!
  * GhostBridge for JARVIS-NV
- * 
+ *
  * Handles gRPC and QUIC communication with GhostChain network,
  * providing high-performance, low-latency blockchain operations.
  */
 
 use anyhow::{Context, Result};
+use quinn::{ClientConfig, Endpoint, ServerConfig};
+use rustls::{Certificate, PrivateKey, ServerConfig as RustlsServerConfig};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, Instant};
-use tracing::{info, warn, error, debug};
-use tonic::{transport::Server, Request, Response, Status};
-use quinn::{Endpoint, ServerConfig, ClientConfig};
-use rustls::{Certificate, PrivateKey, ServerConfig as RustlsServerConfig};
+use tonic::{Request, Response, Status, transport::Server};
+use tracing::{debug, error, info, warn};
 
 use crate::config::{BridgeConfig, Web5Config};
 
@@ -61,19 +61,19 @@ pub struct BridgeRequest {
 pub struct GhostBridge {
     config: BridgeConfig,
     web5_config: Web5Config,
-    
+
     // Server components
     grpc_server: Option<Arc<tokio::task::JoinHandle<()>>>,
     quic_endpoint: Option<Arc<Endpoint>>,
-    
+
     // Connection tracking
     active_connections: Arc<RwLock<HashMap<String, ConnectionMetrics>>>,
     request_history: Arc<Mutex<Vec<BridgeRequest>>>,
-    
+
     // Metrics
     bridge_status: Arc<RwLock<BridgeStatus>>,
     connection_count: Arc<RwLock<u32>>,
-    
+
     // Runtime state
     is_running: Arc<RwLock<bool>>,
     start_time: Instant,
@@ -84,10 +84,12 @@ pub mod ghostbridge_proto {
     tonic::include_proto!("ghostbridge");
 }
 
-use ghostbridge_proto::ghost_bridge_server::{GhostBridge as GhostBridgeService, GhostBridgeServer};
+use ghostbridge_proto::ghost_bridge_server::{
+    GhostBridge as GhostBridgeService, GhostBridgeServer,
+};
 use ghostbridge_proto::{
-    BlockRequest, BlockResponse, TransactionRequest, TransactionResponse,
-    StatusRequest, StatusResponse, MetricsRequest, MetricsResponse,
+    BlockRequest, BlockResponse, MetricsRequest, MetricsResponse, StatusRequest, StatusResponse,
+    TransactionRequest, TransactionResponse,
 };
 
 #[derive(Default)]
@@ -119,8 +121,10 @@ impl GhostBridgeService for GhostBridgeServiceImpl {
             total_difficulty: "0xa4a470781c00000000000000000000".to_string(),
             size: 50000,
             parent_hash: format!("0x{:064x}", req.block_number.saturating_sub(1)),
-            state_root: "0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0".to_string(),
-            transactions_root: "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789".to_string(),
+            state_root: "0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+                .to_string(),
+            transactions_root: "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+                .to_string(),
         };
 
         Ok(Response::new(response))
@@ -239,7 +243,7 @@ impl GhostBridge {
     /// Start GhostBridge services
     pub async fn start(&self) -> Result<()> {
         info!("🚀 Starting GhostBridge...");
-        
+
         *self.is_running.write().await = true;
 
         if !self.config.enabled {
@@ -268,7 +272,7 @@ impl GhostBridge {
     /// Stop GhostBridge services
     pub async fn stop(&self) -> Result<()> {
         info!("🛑 Stopping GhostBridge...");
-        
+
         *self.is_running.write().await = false;
 
         // Stop gRPC server
@@ -308,18 +312,20 @@ impl GhostBridge {
 
     /// Start gRPC server
     async fn start_grpc_server(&self) -> Result<()> {
-        let endpoint_url = url::Url::parse(&self.config.grpc_endpoint)
-            .context("Invalid gRPC endpoint URL")?;
-        
+        let endpoint_url =
+            url::Url::parse(&self.config.grpc_endpoint).context("Invalid gRPC endpoint URL")?;
+
         let host = endpoint_url.host_str().unwrap_or("127.0.0.1");
         let port = endpoint_url.port().unwrap_or(9090);
-        
+
         // Convert IPv6 addresses
         let addr = if host == "::" || host == "[::]" {
-            format!("[::1]:{}", port).parse()
+            format!("[::1]:{}", port)
+                .parse()
                 .context("Failed to parse IPv6 address")?
         } else {
-            format!("{}:{}", host, port).parse()
+            format!("{}:{}", host, port)
+                .parse()
                 .context("Failed to parse address")?
         };
 
@@ -331,9 +337,7 @@ impl GhostBridge {
 
         let service = GhostBridgeServer::new(service_impl);
 
-        let server_future = Server::builder()
-            .add_service(service)
-            .serve(addr);
+        let server_future = Server::builder().add_service(service).serve(addr);
 
         let handle = tokio::spawn(async move {
             if let Err(e) = server_future.await {
@@ -355,24 +359,26 @@ impl GhostBridge {
             info!("🚀 Starting QUIC server on {}", quic_endpoint_str);
 
             // Parse QUIC endpoint
-            let endpoint_url = url::Url::parse(quic_endpoint_str)
-                .context("Invalid QUIC endpoint URL")?;
-            
+            let endpoint_url =
+                url::Url::parse(quic_endpoint_str).context("Invalid QUIC endpoint URL")?;
+
             let host = endpoint_url.host_str().unwrap_or("127.0.0.1");
             let port = endpoint_url.port().unwrap_or(9091);
-            
+
             let addr = if host == "::" || host == "[::]" {
-                format!("[::1]:{}", port).parse()
+                format!("[::1]:{}", port)
+                    .parse()
                     .context("Failed to parse IPv6 address")?
             } else {
-                format!("{}:{}", host, port).parse()
+                format!("{}:{}", host, port)
+                    .parse()
                     .context("Failed to parse address")?
             };
 
             // Create QUIC server configuration
             let server_config = self.create_quic_server_config().await?;
-            let endpoint = Endpoint::server(server_config, addr)
-                .context("Failed to create QUIC endpoint")?;
+            let endpoint =
+                Endpoint::server(server_config, addr).context("Failed to create QUIC endpoint")?;
 
             // Start accepting connections
             let connections = Arc::clone(&self.active_connections);
@@ -382,13 +388,13 @@ impl GhostBridge {
                 while *is_running.read().await {
                     if let Some(connecting) = endpoint.accept().await {
                         let connections = Arc::clone(&connections);
-                        
+
                         tokio::spawn(async move {
                             match connecting.await {
                                 Ok(connection) => {
                                     let connection_id = format!("quic_{}", uuid::Uuid::new_v4());
                                     info!("🔗 New QUIC connection: {}", connection_id);
-                                    
+
                                     let metrics = ConnectionMetrics {
                                         timestamp: chrono::Utc::now(),
                                         connection_id: connection_id.clone(),
@@ -401,11 +407,19 @@ impl GhostBridge {
                                         errors: 0,
                                         established_at: chrono::Utc::now(),
                                     };
-                                    
-                                    connections.write().await.insert(connection_id.clone(), metrics);
-                                    
+
+                                    connections
+                                        .write()
+                                        .await
+                                        .insert(connection_id.clone(), metrics);
+
                                     // Handle QUIC streams
-                                    Self::handle_quic_connection(connection, connection_id, connections).await;
+                                    Self::handle_quic_connection(
+                                        connection,
+                                        connection_id,
+                                        connections,
+                                    )
+                                    .await;
                                 }
                                 Err(e) => {
                                     error!("❌ Failed to establish QUIC connection: {}", e);
@@ -441,13 +455,13 @@ impl GhostBridge {
         rustls_config.alpn_protocols = vec![b"h3".to_vec(), b"hq-29".to_vec()];
 
         let mut server_config = ServerConfig::with_crypto(Arc::new(rustls_config));
-        
+
         // Configure QUIC transport parameters
         let mut transport_config = quinn::TransportConfig::default();
         transport_config.max_concurrent_uni_streams(100_u32.into());
         transport_config.max_concurrent_bidi_streams(100_u32.into());
         transport_config.max_idle_timeout(Some(Duration::from_secs(60).try_into().unwrap()));
-        
+
         server_config.transport = Arc::new(transport_config);
 
         Ok(server_config)
@@ -462,7 +476,7 @@ impl GhostBridge {
         while let Ok((send, recv)) = connection.accept_bi().await {
             let connection_id = connection_id.clone();
             let connections = Arc::clone(&connections);
-            
+
             tokio::spawn(async move {
                 // Handle bidirectional stream
                 match Self::handle_quic_stream(send, recv, &connection_id, &connections).await {
@@ -471,7 +485,7 @@ impl GhostBridge {
                     }
                     Err(e) => {
                         error!("❌ Error handling QUIC stream: {}", e);
-                        
+
                         // Update error count
                         if let Some(metrics) = connections.write().await.get_mut(&connection_id) {
                             metrics.errors += 1;
@@ -480,7 +494,7 @@ impl GhostBridge {
                 }
             });
         }
-        
+
         // Remove connection when done
         connections.write().await.remove(&connection_id);
         info!("🔌 QUIC connection closed: {}", connection_id);
@@ -500,7 +514,7 @@ impl GhostBridge {
         }
 
         let request_size = buffer.len();
-        
+
         // Process request (simplified)
         let response = serde_json::json!({
             "status": "success",
@@ -510,7 +524,7 @@ impl GhostBridge {
         });
 
         let response_data = serde_json::to_vec(&response)?;
-        
+
         // Send response
         send.write_all(&response_data).await?;
         send.finish().await?;
@@ -533,13 +547,13 @@ impl GhostBridge {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
                 let connection_map = connections.read().await;
                 let active_count = connection_map.len() as u32;
-                
+
                 // Update bridge status
                 let mut status = bridge_status.write().await;
                 status.active_connections = active_count;
@@ -557,8 +571,10 @@ impl GhostBridge {
                 status.total_requests = total_requests;
                 status.avg_response_time_ms = avg_latency;
 
-                debug!("📊 Bridge monitoring: {} active connections, {} total requests", 
-                       active_count, total_requests);
+                debug!(
+                    "📊 Bridge monitoring: {} active connections, {} total requests",
+                    active_count, total_requests
+                );
             }
         })
     }
@@ -570,7 +586,7 @@ impl GhostBridge {
 
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
-            
+
             while *is_running.read().await {
                 interval.tick().await;
 
@@ -579,7 +595,10 @@ impl GhostBridge {
                 let cutoff = chrono::Utc::now() - chrono::Duration::hours(24);
                 history.retain(|req| req.timestamp > cutoff);
 
-                debug!("🧹 Cleaned up request history, {} requests retained", history.len());
+                debug!(
+                    "🧹 Cleaned up request history, {} requests retained",
+                    history.len()
+                );
             }
         })
     }
