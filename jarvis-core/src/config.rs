@@ -8,6 +8,8 @@ pub struct Config {
     pub llm: LLMConfig,
     pub system: SystemConfig,
     pub blockchain: Option<BlockchainConfig>,
+    pub network: NetworkConfig,
+    pub agents: AgentConfig,
     pub database_path: String,
     pub plugin_paths: Vec<String>,
 }
@@ -43,12 +45,113 @@ pub struct BlockchainConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GhostChainConfig {
-    pub rpc_url: String,
+    pub grpc_url: String,
+    pub rpc_url: String, // Fallback JSON-RPC
     pub chain_id: u64,
     pub walletd_url: Option<String>,
     pub ghostbridge_url: Option<String>,
     pub zvm_url: Option<String>,
+    pub use_tls: bool,
+    pub ipv6_preferred: bool,
+    pub connection_timeout_secs: u64,
+    pub request_timeout_secs: u64,
+    pub max_concurrent_streams: u32,
     pub zns_url: Option<String>,
+}
+
+impl Default for GhostChainConfig {
+    fn default() -> Self {
+        Self {
+            grpc_url: "https://[::1]:9090".to_string(),
+            rpc_url: "https://[::1]:8545".to_string(),
+            chain_id: 1337,
+            walletd_url: None,
+            ghostbridge_url: None,
+            zvm_url: None,
+            use_tls: true,
+            ipv6_preferred: true,
+            connection_timeout_secs: 10,
+            request_timeout_secs: 30,
+            max_concurrent_streams: 100,
+            zns_url: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    pub ipv6_enabled: bool,
+    pub ipv6_preferred: bool,
+    pub dns_over_https: bool,
+    pub dns_servers: Vec<String>,
+    pub optimization_level: NetworkOptimizationLevel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkOptimizationLevel {
+    Conservative,
+    Balanced,
+    Aggressive,
+    BlockchainOptimized,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfig {
+    pub transaction_monitor: TransactionMonitorConfig,
+    pub contract_auditor: ContractAuditorConfig,
+    pub gas_optimizer: GasOptimizerConfig,
+    pub network_optimizer: NetworkOptimizerConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionMonitorConfig {
+    pub enabled: bool,
+    pub alert_threshold: AlertThreshold,
+    pub auto_response: bool,
+    pub batch_size: u32,
+    pub stream_buffer_size: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractAuditorConfig {
+    pub enabled: bool,
+    pub audit_frequency: String,
+    pub ai_model: String,
+    pub deep_analysis: bool,
+    pub auto_maintenance: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GasOptimizerConfig {
+    pub enabled: bool,
+    pub strategy: GasOptimizationStrategy,
+    pub target_confirmation_time_secs: u32,
+    pub max_gas_price_gwei: u64,
+    pub auto_optimize: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkOptimizerConfig {
+    pub enabled: bool,
+    pub ipv6_optimization: bool,
+    pub bandwidth_monitoring: bool,
+    pub latency_optimization: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AlertThreshold {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GasOptimizationStrategy {
+    Conservative,
+    Balanced,
+    Aggressive,
+    MLBased,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,11 +181,17 @@ impl Default for Config {
             },
             blockchain: Some(BlockchainConfig {
                 ghostchain: Some(GhostChainConfig {
+                    grpc_url: "https://[::1]:9090".to_string(),
                     rpc_url: "http://localhost:8545".to_string(),
                     chain_id: 31337,
                     walletd_url: Some("http://localhost:8080".to_string()),
                     ghostbridge_url: Some("http://localhost:8081".to_string()),
                     zvm_url: Some("http://localhost:8082".to_string()),
+                    use_tls: true,
+                    ipv6_preferred: true,
+                    connection_timeout_secs: 10,
+                    request_timeout_secs: 30,
+                    max_concurrent_streams: 100,
                     zns_url: Some("http://localhost:8083".to_string()),
                 }),
                 ethereum: None,
@@ -90,6 +199,47 @@ impl Default for Config {
                 gas_optimization: true,
                 security_monitoring: true,
             }),
+            network: NetworkConfig {
+                ipv6_enabled: true,
+                ipv6_preferred: true,
+                dns_over_https: true,
+                dns_servers: vec![
+                    "[2606:4700:4700::1111]".to_string(), // Cloudflare IPv6
+                    "[2606:4700:4700::1001]".to_string(),
+                    "1.1.1.1".to_string(), // Fallback IPv4
+                    "1.0.0.1".to_string(),
+                ],
+                optimization_level: NetworkOptimizationLevel::BlockchainOptimized,
+            },
+            agents: AgentConfig {
+                transaction_monitor: TransactionMonitorConfig {
+                    enabled: true,
+                    alert_threshold: AlertThreshold::Medium,
+                    auto_response: true,
+                    batch_size: 100,
+                    stream_buffer_size: 1000,
+                },
+                contract_auditor: ContractAuditorConfig {
+                    enabled: true,
+                    audit_frequency: "hourly".to_string(),
+                    ai_model: "llama3.1:8b".to_string(),
+                    deep_analysis: true,
+                    auto_maintenance: false,
+                },
+                gas_optimizer: GasOptimizerConfig {
+                    enabled: true,
+                    strategy: GasOptimizationStrategy::MLBased,
+                    target_confirmation_time_secs: 15,
+                    max_gas_price_gwei: 50,
+                    auto_optimize: true,
+                },
+                network_optimizer: NetworkOptimizerConfig {
+                    enabled: true,
+                    ipv6_optimization: true,
+                    bandwidth_monitoring: true,
+                    latency_optimization: true,
+                },
+            },
             database_path: "~/.local/share/jarvis/memory.db".to_string(),
             plugin_paths: vec![
                 "~/.config/jarvis/plugins".to_string(),

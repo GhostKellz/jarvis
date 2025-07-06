@@ -1,0 +1,156 @@
+syntax = "proto3";
+
+package ghostchain.transaction;
+
+import "google/protobuf/timestamp.proto";
+
+// Transaction monitoring and analysis service
+service TransactionService {
+  // Analyze transaction for security issues
+  rpc AnalyzeTransaction(AnalyzeTransactionRequest) returns (TransactionAnalysis);
+  
+  // Get transaction pool status
+  rpc GetMempoolStatus(Empty) returns (MempoolStatus);
+  
+  // Monitor transactions by criteria
+  rpc MonitorTransactions(MonitorRequest) returns (stream TransactionEvent);
+  
+  // Optimize gas for transaction
+  rpc OptimizeGasPrice(OptimizeGasRequest) returns (GasOptimization);
+  
+  // Submit optimized transaction
+  rpc SubmitTransaction(SubmitTransactionRequest) returns (TransactionReceipt);
+}
+
+message Empty {}
+
+message AnalyzeTransactionRequest {
+  string transaction_hash = 1;
+  bool deep_analysis = 2;
+  repeated string analysis_types = 3; // security, gas, mev, etc.
+}
+
+message TransactionAnalysis {
+  string transaction_hash = 1;
+  SecurityAnalysis security = 2;
+  GasAnalysis gas = 3;
+  MevAnalysis mev = 4;
+  RiskScore risk_score = 5;
+  repeated Finding findings = 6;
+  google.protobuf.Timestamp analyzed_at = 7;
+}
+
+message SecurityAnalysis {
+  bool is_suspicious = 1;
+  repeated SecurityThreat threats = 2;
+  double confidence_score = 3;
+  string analysis_details = 4;
+}
+
+enum SecurityThreat {
+  UNKNOWN_THREAT = 0;
+  FRONT_RUNNING = 1;
+  SANDWICH_ATTACK = 2;
+  FLASH_LOAN_ATTACK = 3;
+  REENTRANCY = 4;
+  PRICE_MANIPULATION = 5;
+  SMART_CONTRACT_EXPLOIT = 6;
+}
+
+message GasAnalysis {
+  string current_gas_price = 1;
+  string optimal_gas_price = 2;
+  double potential_savings = 3;
+  uint32 estimated_confirmation_time = 4;
+  string recommendation = 5;
+}
+
+message MevAnalysis {
+  bool mev_detected = 1;
+  string mev_type = 2;
+  string potential_profit = 3;
+  repeated string affected_addresses = 4;
+}
+
+message RiskScore {
+  double overall_score = 1; // 0-100, higher is riskier
+  RiskLevel level = 2;
+  repeated RiskFactor factors = 3;
+}
+
+enum RiskLevel {
+  LOW = 0;
+  MEDIUM = 1;
+  HIGH = 2;
+  CRITICAL = 3;
+}
+
+message RiskFactor {
+  string type = 1;
+  double score = 2;
+  string description = 3;
+}
+
+message Finding {
+  string type = 1;
+  string severity = 2;
+  string description = 3;
+  string recommendation = 4;
+  double confidence = 5;
+}
+
+message MempoolStatus {
+  uint32 pending_transactions = 1;
+  uint32 queued_transactions = 2;
+  string average_gas_price = 3;
+  string median_gas_price = 4;
+  uint32 average_wait_time = 5;
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+message MonitorRequest {
+  repeated string addresses = 1;
+  repeated string contract_addresses = 2;
+  string min_value = 3;
+  repeated SecurityThreat threat_types = 4;
+  bool include_internal_transactions = 5;
+}
+
+message TransactionEvent {
+  string transaction_hash = 1;
+  string event_type = 2; // new, confirmed, failed, suspicious
+  TransactionAnalysis analysis = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message OptimizeGasRequest {
+  string transaction_data = 1;
+  string from_address = 2;
+  string to_address = 3;
+  string value = 4;
+  uint32 target_confirmation_time = 5; // seconds
+}
+
+message GasOptimization {
+  string optimal_gas_price = 1;
+  string optimal_gas_limit = 2;
+  uint32 estimated_confirmation_time = 3;
+  double potential_savings = 4;
+  string reasoning = 5;
+}
+
+message SubmitTransactionRequest {
+  string signed_transaction = 1;
+  bool auto_optimize = 2;
+  uint32 max_wait_time = 3;
+}
+
+message TransactionReceipt {
+  string transaction_hash = 1;
+  bool success = 2;
+  uint64 block_number = 3;
+  uint32 transaction_index = 4;
+  string gas_used = 5;
+  string effective_gas_price = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}

@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package ghostchain.network;
+
+import "google/protobuf/timestamp.proto";
+
+// Network optimization and monitoring service
+service NetworkService {
+  // Get current network performance metrics
+  rpc GetNetworkMetrics(Empty) returns (NetworkMetrics);
+  
+  // Monitor network performance continuously
+  rpc StreamNetworkMetrics(Empty) returns (stream NetworkMetrics);
+  
+  // Get IPv6 configuration and status
+  rpc GetIPv6Status(Empty) returns (IPv6Status);
+  
+  // Get QUIC connection information
+  rpc GetQuicStatus(Empty) returns (QuicStatus);
+  
+  // Optimize network configuration
+  rpc OptimizeNetwork(OptimizeNetworkRequest) returns (NetworkOptimization);
+  
+  // Get peer information
+  rpc GetPeerInfo(Empty) returns (PeerInfo);
+  
+  // Test network connectivity
+  rpc TestConnectivity(ConnectivityTestRequest) returns (ConnectivityTestResult);
+}
+
+message Empty {}
+
+message NetworkMetrics {
+  double latency_ms = 1;
+  double throughput_mbps = 2;
+  uint32 active_connections = 3;
+  uint32 peer_count = 4;
+  double packet_loss_rate = 5;
+  uint64 bytes_sent = 6;
+  uint64 bytes_received = 7;
+  ConnectionStats ipv4_stats = 8;
+  ConnectionStats ipv6_stats = 9;
+  QuicStats quic_stats = 10;
+  google.protobuf.Timestamp timestamp = 11;
+}
+
+message ConnectionStats {
+  uint32 active_connections = 1;
+  uint32 total_connections = 2;
+  double average_latency = 3;
+  uint64 bytes_transferred = 4;
+  uint32 failed_connections = 5;
+}
+
+message QuicStats {
+  uint32 active_streams = 1;
+  uint32 completed_handshakes = 2;
+  uint32 zero_rtt_connections = 3;
+  double average_handshake_time = 4;
+  uint64 bytes_transferred = 5;
+  uint32 connection_migrations = 6;
+}
+
+message IPv6Status {
+  bool enabled = 1;
+  bool preferred = 2;
+  repeated string addresses = 3;
+  string default_route = 4;
+  uint32 active_connections = 5;
+  double success_rate = 6;
+  NetworkConfiguration config = 7;
+}
+
+message NetworkConfiguration {
+  bool dual_stack = 1;
+  bool ipv6_only = 2;
+  repeated string dns_servers = 3;
+  uint32 mtu_size = 4;
+  bool dns_over_https = 5;
+  bool dns_over_quic = 6;
+}
+
+message QuicStatus {
+  bool enabled = 1;
+  string version = 2;
+  bool zero_rtt_enabled = 3;
+  repeated string supported_versions = 4;
+  uint32 max_concurrent_streams = 5;
+  uint32 connection_timeout = 6;
+  CongestionControl congestion_control = 7;
+}
+
+message CongestionControl {
+  string algorithm = 1;
+  uint32 initial_window = 2;
+  uint32 max_window = 3;
+  double rtt_estimate = 4;
+}
+
+message OptimizeNetworkRequest {
+  NetworkOptimizationType optimization_type = 1;
+  repeated string target_endpoints = 2;
+  uint32 target_latency_ms = 3;
+  uint32 target_throughput_mbps = 4;
+  bool prioritize_ipv6 = 5;
+  bool enable_zero_rtt = 6;
+}
+
+enum NetworkOptimizationType {
+  LATENCY = 0;
+  THROUGHPUT = 1;
+  RELIABILITY = 2;
+  BALANCED = 3;
+  BLOCKCHAIN_OPTIMIZED = 4;
+}
+
+message NetworkOptimization {
+  repeated OptimizationRecommendation recommendations = 1;
+  EstimatedImprovement estimated_improvement = 2;
+  string configuration_changes = 3;
+  bool requires_restart = 4;
+}
+
+message OptimizationRecommendation {
+  string type = 1;
+  string description = 2;
+  double impact_score = 3;
+  string implementation = 4;
+  bool is_critical = 5;
+}
+
+message EstimatedImprovement {
+  double latency_improvement_percent = 1;
+  double throughput_improvement_percent = 2;
+  double reliability_improvement_percent = 3;
+  uint32 estimated_gas_savings_percent = 4;
+}
+
+message PeerInfo {
+  uint32 total_peers = 1;
+  uint32 ipv6_peers = 2;
+  uint32 quic_peers = 3;
+  repeated Peer active_peers = 4;
+  NetworkDistribution distribution = 5;
+}
+
+message Peer {
+  string id = 1;
+  string address = 2;
+  bool is_ipv6 = 3;
+  bool supports_quic = 4;
+  double latency_ms = 5;
+  string version = 6;
+  google.protobuf.Timestamp connected_at = 7;
+  uint64 bytes_sent = 8;
+  uint64 bytes_received = 9;
+}
+
+message NetworkDistribution {
+  uint32 local_peers = 1;
+  uint32 regional_peers = 2;
+  uint32 global_peers = 3;
+  repeated GeographicDistribution geographic = 4;
+}
+
+message GeographicDistribution {
+  string region = 1;
+  uint32 peer_count = 2;
+  double average_latency = 3;
+}
+
+message ConnectivityTestRequest {
+  repeated string target_endpoints = 1;
+  bool test_ipv6 = 2;
+  bool test_quic = 3;
+  bool test_http3 = 4;
+  uint32 timeout_seconds = 5;
+}
+
+message ConnectivityTestResult {
+  repeated EndpointResult results = 1;
+  NetworkSummary summary = 2;
+  google.protobuf.Timestamp tested_at = 3;
+}
+
+message EndpointResult {
+  string endpoint = 1;
+  bool reachable = 2;
+  double latency_ms = 3;
+  bool ipv6_reachable = 4;
+  bool quic_supported = 5;
+  bool http3_supported = 6;
+  string error_message = 7;
+}
+
+message NetworkSummary {
+  double overall_health_score = 1;
+  uint32 reachable_endpoints = 2;
+  uint32 total_endpoints = 3;
+  double average_latency = 4;
+  uint32 ipv6_success_rate = 5;
+  uint32 quic_success_rate = 6;
+}

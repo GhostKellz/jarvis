@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::{Pool, Sqlite, SqlitePool};
+use sqlx::{Pool, Sqlite, SqlitePool, Row};
 use uuid::Uuid;
 use chrono::Utc;
 use crate::types::{Conversation, Message, MessageRole, MessageMetadata, AgentTask};
@@ -59,6 +59,13 @@ impl MemoryStore {
                 created_at TEXT NOT NULL,
                 completed_at TEXT,
                 result TEXT
+            );
+            
+            CREATE TABLE IF NOT EXISTS documents (
+                key TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
             
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages (conversation_id);
@@ -237,5 +244,44 @@ impl MemoryStore {
         }
         
         Ok(tasks)
+    }
+
+    /// Store a generic document with a key-value pair
+    pub async fn store_document(&self, key: &str, data: &str) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO documents (key, data, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?3)
+            "#
+        )
+        .bind(key)
+        .bind(data)
+        .bind(Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+        
+        Ok(())
+    }
+
+    /// Retrieve a document by key
+    pub async fn get_document(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query(
+            "SELECT data FROM documents WHERE key = ?1"
+        )
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.get::<String, _>(0)))
+    }
+
+    /// Delete a document by key
+    pub async fn delete_document(&self, key: &str) -> Result<()> {
+        sqlx::query("DELETE FROM documents WHERE key = ?1")
+            .bind(key)
+            .execute(&self.pool)
+            .await?;
+        
+        Ok(())
     }
 }

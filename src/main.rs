@@ -6,6 +6,9 @@ use jarvis_shell::Environment;
 use tracing::{info, Level};
 use tracing_subscriber;
 
+mod commands;
+use commands::{BlockchainCommands, handle_blockchain_command};
+
 #[derive(Parser)]
 #[command(name = "jarvis")]
 #[command(about = "Your local AI assistant for Rust, Linux, and Homelab operations")]
@@ -94,79 +97,6 @@ enum ConfigCommands {
     Set {
         key: String,
         value: String,
-    },
-}
-
-#[derive(Subcommand)]
-enum BlockchainCommands {
-    /// Analyze blockchain network performance
-    Analyze {
-        /// Network to analyze (ghostchain, zig-blockchain, or auto-detect)
-        #[arg(short, long, default_value = "auto")]
-        network: String,
-    },
-    /// Optimize network settings for IPv6 and QUIC
-    Optimize {
-        /// Optimization target (ipv6, quic, all)
-        #[arg(short, long, default_value = "all")]
-        target: String,
-        /// Enable dry-run mode (show recommendations without executing)
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Audit smart contracts for security and gas optimization
-    Audit {
-        /// Contract address or path to contract code
-        contract: String,
-        /// Security level (basic, standard, comprehensive, paranoid)
-        #[arg(short, long, default_value = "comprehensive")]
-        security_level: String,
-    },
-    /// Monitor blockchain performance in real-time
-    Monitor {
-        /// Monitoring duration in seconds (0 for continuous)
-        #[arg(short, long, default_value = "0")]
-        duration: u64,
-        /// Output format (json, table, dashboard)
-        #[arg(short, long, default_value = "dashboard")]
-        format: String,
-    },
-    /// Schedule or execute maintenance tasks
-    Maintenance {
-        #[command(subcommand)]
-        action: MaintenanceActions,
-    },
-    /// Configure blockchain agent settings
-    Configure {
-        /// Agent type to configure
-        agent: String,
-        /// Configuration key-value pairs
-        settings: Vec<String>,
-    },
-    /// Show status of all blockchain agents
-    Status,
-}
-
-#[derive(Subcommand)]
-enum MaintenanceActions {
-    /// Schedule a maintenance task
-    Schedule {
-        /// Task type (cleanup, update, optimization, backup)
-        task_type: String,
-        /// Scheduled time (e.g., "2024-01-15 02:00" or "in 1 hour")
-        when: String,
-    },
-    /// List scheduled maintenance tasks
-    List,
-    /// Cancel a scheduled task
-    Cancel {
-        /// Task ID to cancel
-        task_id: String,
-    },
-    /// Execute emergency maintenance
-    Emergency {
-        /// Emergency task type
-        task_type: String,
     },
 }
 
@@ -264,50 +194,7 @@ async fn main() -> Result<()> {
             unreachable!("Config commands should be handled earlier")
         }
         Commands::Blockchain { blockchain_command } => {
-            match blockchain_command {
-                BlockchainCommands::Analyze { network } => {
-                    info!("🔍 Analyzing blockchain network: {}", network);
-                    agent_runner.analyze_blockchain(&network).await?;
-                }
-                BlockchainCommands::Optimize { target, dry_run } => {
-                    info!("⚙️ Optimizing network settings: {} (dry run: {})", target, dry_run);
-                    agent_runner.optimize_network(&target, dry_run).await?;
-                }
-                BlockchainCommands::Audit { contract, security_level } => {
-                    info!("🔒 Auditing smart contract: {} (security level: {})", contract, security_level);
-                    agent_runner.audit_contract(&contract, &security_level).await?;
-                }
-                BlockchainCommands::Monitor { duration, format } => {
-                    info!("📊 Monitoring blockchain performance: {} seconds, format: {}", duration, format);
-                    agent_runner.monitor_blockchain(duration, &format).await?;
-                }
-                BlockchainCommands::Maintenance { action } => {
-                    match action {
-                        MaintenanceActions::Schedule { task_type, when } => {
-                            info!("🗓️ Scheduling maintenance task: {} at {}", task_type, when);
-                            agent_runner.schedule_maintenance(&task_type, &when).await?;
-                        }
-                        MaintenanceActions::List => {
-                            agent_runner.list_maintenance_tasks().await?;
-                        }
-                        MaintenanceActions::Cancel { task_id } => {
-                            info!("❌ Cancelling maintenance task: {}", task_id);
-                            agent_runner.cancel_maintenance(&task_id).await?;
-                        }
-                        MaintenanceActions::Emergency { task_type } => {
-                            info!("🚨 Executing emergency maintenance: {}", task_type);
-                            agent_runner.emergency_maintenance(&task_type).await?;
-                        }
-                    }
-                }
-                BlockchainCommands::Configure { agent, settings } => {
-                    info!("⚙️ Configuring blockchain agent: {} with settings: {:?}", agent, settings);
-                    agent_runner.configure_blockchain_agent(&agent, &settings).await?;
-                }
-                BlockchainCommands::Status => {
-                    agent_runner.show_blockchain_agent_status().await?;
-                }
-            }
+            handle_blockchain_command(blockchain_command, &config).await?;
         }
     }
     

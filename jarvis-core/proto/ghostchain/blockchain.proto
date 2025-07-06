@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package ghostchain.blockchain;
+
+import "google/protobuf/timestamp.proto";
+
+// GhostChain Blockchain gRPC service
+service BlockchainService {
+  // Get latest block
+  rpc GetLatestBlock(Empty) returns (Block);
+  
+  // Get block by number or hash
+  rpc GetBlock(GetBlockRequest) returns (Block);
+  
+  // Get network information
+  rpc GetNetworkInfo(Empty) returns (NetworkInfo);
+  
+  // Get gas price information
+  rpc GetGasPrice(Empty) returns (GasPrice);
+  
+  // Monitor new blocks (streaming)
+  rpc StreamBlocks(Empty) returns (stream Block);
+  
+  // Monitor new transactions (streaming)
+  rpc StreamTransactions(Empty) returns (stream Transaction);
+  
+  // Monitor network health
+  rpc StreamNetworkHealth(Empty) returns (stream NetworkHealth);
+}
+
+message Empty {}
+
+message GetBlockRequest {
+  oneof identifier {
+    uint64 block_number = 1;
+    string block_hash = 2;
+  }
+}
+
+message Block {
+  uint64 number = 1;
+  string hash = 2;
+  string parent_hash = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  uint32 transaction_count = 5;
+  uint64 gas_used = 6;
+  uint64 gas_limit = 7;
+  string miner = 8;
+  uint64 size = 9;
+  repeated Transaction transactions = 10;
+  uint64 difficulty = 11;
+  string state_root = 12;
+  string transactions_root = 13;
+  string receipts_root = 14;
+}
+
+message Transaction {
+  string hash = 1;
+  string from = 2;
+  string to = 3;
+  string value = 4;
+  uint64 gas = 5;
+  string gas_price = 6;
+  string data = 7;
+  uint64 nonce = 8;
+  TransactionStatus status = 9;
+  uint64 block_number = 10;
+  uint32 transaction_index = 11;
+  google.protobuf.Timestamp timestamp = 12;
+}
+
+enum TransactionStatus {
+  PENDING = 0;
+  CONFIRMED = 1;
+  FAILED = 2;
+}
+
+message NetworkInfo {
+  string network_name = 1;
+  uint64 chain_id = 2;
+  uint64 latest_block = 3;
+  uint32 peer_count = 4;
+  bool is_syncing = 5;
+  NetworkProtocol protocol = 6;
+}
+
+message NetworkProtocol {
+  bool ipv6_enabled = 1;
+  bool quic_enabled = 2;
+  bool http3_enabled = 3;
+  string version = 4;
+}
+
+message GasPrice {
+  string base_fee = 1;
+  string priority_fee = 2;
+  string max_fee = 3;
+  uint32 estimated_confirmation_time = 4;
+  NetworkCongestion congestion = 5;
+}
+
+enum NetworkCongestion {
+  LOW = 0;
+  MEDIUM = 1;
+  HIGH = 2;
+  CRITICAL = 3;
+}
+
+message NetworkHealth {
+  uint32 peer_count = 1;
+  double average_latency = 2;
+  bool is_syncing = 3;
+  uint64 latest_block = 4;
+  double block_time = 5;
+  uint32 mempool_size = 6;
+  NetworkCongestion congestion = 7;
+  google.protobuf.Timestamp timestamp = 8;
+}
