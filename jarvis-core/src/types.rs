@@ -143,13 +143,3 @@ impl Default for SystemInfo {
         }
     }
 }
-
-// Blockchain stubs
-#[derive(Debug, Clone)]
-pub struct BlockchainManager;
-
-impl BlockchainManager {
-    pub fn new() -> Self {
-        Self
-    }
-}

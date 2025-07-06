@@ -8,7 +8,6 @@ use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
 use crate::network::{NetworkManager, AgentMessage, MessageType, AgentPeer, AgentCapability, ConnectionState};
-// use crate::blockchain::BlockchainManager; // Commented out until blockchain module is fixed
 use crate::deployment::DeploymentManager;
 use crate::skills::{Skill, SkillMetadata, SkillContext, SkillResult, SkillCategory, Permission};
 
@@ -16,7 +15,6 @@ use crate::skills::{Skill, SkillMetadata, SkillContext, SkillResult, SkillCatego
 pub struct AgentMesh {
     pub local_agent_id: Uuid,
     pub network_manager: Arc<RwLock<NetworkManager>>,
-    pub blockchain_manager: Arc<RwLock<BlockchainManager>>,
     pub deployment_manager: Arc<RwLock<DeploymentManager>>,
     pub peer_capabilities: HashMap<Uuid, Vec<AgentCapability>>,
     pub task_coordination: TaskCoordinator,
@@ -151,13 +149,11 @@ impl AgentMesh {
     pub async fn new(
         local_agent_id: Uuid,
         network_manager: Arc<RwLock<NetworkManager>>,
-        blockchain_manager: Arc<RwLock<BlockchainManager>>,
         deployment_manager: Arc<RwLock<DeploymentManager>>,
     ) -> Result<Self> {
         Ok(Self {
             local_agent_id,
             network_manager,
-            blockchain_manager,
             deployment_manager,
             peer_capabilities: HashMap::new(),
             task_coordination: TaskCoordinator::new(),
@@ -253,18 +249,6 @@ impl AgentMesh {
             avg_latency: Self::calculate_average_duration(&latency_metrics),
             network_health: self.calculate_network_health().await,
             timestamp: Utc::now(),
-        })
-    }
-
-    /// Monitor gas fees across blockchain networks
-    pub async fn monitor_gas_fees(&self) -> Result<GasFeeReport> {
-        let blockchain = self.blockchain_manager.read().await;
-        let gas_recommendations = blockchain.get_gas_recommendations().await?;
-        
-        Ok(GasFeeReport {
-            networks: gas_recommendations,
-            timestamp: Utc::now(),
-            optimization_suggestions: self.generate_gas_optimization_suggestions(&gas_recommendations),
         })
     }
 
@@ -531,17 +515,4 @@ pub struct Vulnerability {
 
 pub trait BlockchainNetwork: Send + Sync {
     // Stub trait
-}
-
-/// Temporary BlockchainManager stub
-#[derive(Debug)]
-pub struct BlockchainManager {
-    // Stub fields
-}
-
-impl BlockchainManager {
-    pub async fn get_gas_recommendations(&self) -> anyhow::Result<HashMap<String, GasRecommendation>> {
-        // Stub implementation
-        Ok(HashMap::new())
-    }
 }

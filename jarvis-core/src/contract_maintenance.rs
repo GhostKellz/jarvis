@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-// use crate::blockchain::{BlockchainNetwork, SecurityReport, RiskLevel, Vulnerability}; // Commented out
 use crate::skills::{Skill, SkillMetadata, SkillContext, SkillResult, SkillCategory, Permission};
 
 /// AI-powered smart contract maintenance system
