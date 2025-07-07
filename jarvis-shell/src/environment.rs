@@ -54,6 +54,92 @@ impl Environment {
     pub fn has_aur_helper(&self) -> bool {
         self.arch_info.aur_helper.is_some()
     }
+
+    /// Get comprehensive environment summary for LLM context
+    pub fn get_context_summary(&self) -> String {
+        let mut summary = vec![];
+        
+        summary.push(format!("System: {}", self.system_info()));
+        
+        if let Some(git) = &self.git_context {
+            summary.push(format!(
+                "Git: {} on {} ({}{})",
+                git.repo_path,
+                git.current_branch,
+                git.last_commit,
+                if git.dirty { " - dirty" } else { "" }
+            ));
+        }
+        
+        if let Some(dotfiles) = &self.dotfiles_path {
+            summary.push(format!("Dotfiles: {}", dotfiles.display()));
+        }
+        
+        if self.is_arch_linux() {
+            summary.push(format!(
+                "Arch: {} {}",
+                self.arch_info.package_manager,
+                self.arch_info.aur_helper.as_deref().unwrap_or("no AUR helper")
+            ));
+        }
+        
+        if let Some(de) = &self.arch_info.desktop_environment {
+            summary.push(format!("DE: {}", de));
+        }
+        
+        summary.join(" | ")
+    }
+
+    /// Detect available development tools
+    pub async fn detect_dev_tools(&self) -> Vec<String> {
+        let tools = ["git", "cargo", "rustc", "docker", "kubectl", "npm", "node", "python", "go"];
+        let mut available = Vec::new();
+        
+        for tool in tools {
+            if which::which(tool).is_ok() {
+                available.push(tool.to_string());
+            }
+        }
+        
+        available
+    }
+
+    /// Get memory and disk usage
+    pub async fn get_resource_usage(&self) -> Result<ResourceUsage> {
+        let memory_info = std::fs::read_to_string("/proc/meminfo")
+            .map(|content| {
+                let mut total = 0u64;
+                let mut available = 0u64;
+                
+                for line in content.lines() {
+                    if line.starts_with("MemTotal:") {
+                        total = line.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    } else if line.starts_with("MemAvailable:") {
+                        available = line.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    }
+                }
+                
+                (total * 1024, (total - available) * 1024) // Convert KB to bytes
+            })
+            .unwrap_or((0, 0));
+
+        Ok(ResourceUsage {
+            memory_total: memory_info.0,
+            memory_used: memory_info.1,
+            load_avg: (
+                self.system_info.load_avg.0 as f32,
+                self.system_info.load_avg.1 as f32,
+                self.system_info.load_avg.2 as f32,
+            ),
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ResourceUsage {
+    pub memory_total: u64,
+    pub memory_used: u64,
+    pub load_avg: (f32, f32, f32),
 }
 
 async fn detect_git_context(working_dir: &PathBuf) -> Result<Option<GitContext>> {

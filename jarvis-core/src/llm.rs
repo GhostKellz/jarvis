@@ -1,9 +1,15 @@
 use crate::config::{Config, LLMConfig};
+use crate::memory::{MemoryStore, ContextType, Interaction, InteractionType};
 use anyhow::Result;
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use futures::stream::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
@@ -19,38 +25,84 @@ pub trait LLMProvider: Send + Sync {
 
 #[derive(Clone)]
 pub struct LLMRouter {
-    primary_provider: std::sync::Arc<dyn LLMProvider>,
-    fallback_providers: Vec<std::sync::Arc<dyn LLMProvider>>,
+    primary_provider: Arc<dyn LLMProvider>,
+    fallback_providers: Vec<Arc<dyn LLMProvider>>,
+    model_selector: ModelSelector,
+    prompt_enhancer: PromptEnhancer,
+    response_cache: Arc<RwLock<ResponseCache>>,
+    memory_store: Option<Arc<RwLock<MemoryStore>>>,
+    usage_stats: Arc<RwLock<UsageStats>>,
 }
 
 impl LLMRouter {
     pub async fn new(config: &Config) -> Result<Self> {
         let primary_provider = create_provider(&config.llm).await?;
+        let fallback_providers = create_fallback_providers(&config.llm).await?;
 
         Ok(Self {
             primary_provider,
-            fallback_providers: vec![], // TODO: Add fallback providers
+            fallback_providers,
+            model_selector: ModelSelector::new(),
+            prompt_enhancer: PromptEnhancer::new(),
+            response_cache: Arc::new(RwLock::new(ResponseCache::new())),
+            memory_store: None,
+            usage_stats: Arc::new(RwLock::new(UsageStats::new())),
         })
     }
 
-    pub async fn generate(&self, prompt: &str, context: Option<&str>) -> Result<String> {
-        // Try primary provider first
-        match self.primary_provider.generate(prompt, context).await {
-            Ok(response) => Ok(response),
-            Err(e) => {
-                tracing::warn!("Primary LLM provider failed: {}", e);
+    pub fn with_memory_store(mut self, memory_store: Arc<RwLock<MemoryStore>>) -> Self {
+        self.memory_store = Some(memory_store);
+        self
+    }
 
-                // Try fallback providers
+    pub async fn generate(&self, prompt: &str, context: Option<&str>) -> Result<String> {
+        let start_time = std::time::Instant::now();
+        
+        // Check cache first
+        let cache_key = self.generate_cache_key(prompt, context);
+        if let Some(cached_response) = self.get_cached_response(&cache_key).await {
+            return Ok(cached_response);
+        }
+        
+        // Enhance prompt with context
+        let enhanced_prompt = self.prompt_enhancer.enhance(prompt, context).await?;
+        
+        // Select optimal model based on task
+        let selected_provider = self.model_selector.select_optimal_provider(
+            &enhanced_prompt,
+            &self.primary_provider,
+            &self.fallback_providers
+        ).await;
+        
+        // Try selected provider first
+        let response = match selected_provider.generate(&enhanced_prompt, context).await {
+            Ok(response) => {
+                self.cache_response(&cache_key, &response).await;
+                response
+            },
+            Err(e) => {
+                tracing::warn!("Selected LLM provider failed: {}", e);
+
+                // Try remaining providers
                 for provider in &self.fallback_providers {
-                    match provider.generate(prompt, context).await {
-                        Ok(response) => return Ok(response),
-                        Err(e) => tracing::warn!("Fallback provider failed: {}", e),
+                    if Arc::ptr_eq(provider, &selected_provider) {
+                        continue; // Skip already tried provider
+                    }
+                    
+                    match provider.generate(&enhanced_prompt, context).await {
+                        Ok(response) => {
+                            self.cache_response(&cache_key, &response).await;
+                            return self.process_response(response, start_time, provider.model_name()).await;
+                        },
+                        Err(e) => tracing::warn!("Fallback provider {} failed: {}", provider.model_name(), e),
                     }
                 }
 
-                Err(anyhow::anyhow!("All LLM providers failed"))
+                return Err(anyhow::anyhow!("All LLM providers failed"));
             }
-        }
+        };
+        
+        self.process_response(response, start_time, selected_provider.model_name()).await
     }
 
     pub async fn generate_stream(
@@ -86,15 +138,42 @@ impl LLMRouter {
     }
 }
 
-async fn create_provider(config: &LLMConfig) -> Result<std::sync::Arc<dyn LLMProvider>> {
+async fn create_provider(config: &LLMConfig) -> Result<Arc<dyn LLMProvider>> {
     match config.primary_provider.as_str() {
-        "ollama" => Ok(std::sync::Arc::new(OllamaProvider::new(config).await?)),
-        "openai" => Ok(std::sync::Arc::new(OpenAIProvider::new(config).await?)),
-        "claude" => Ok(std::sync::Arc::new(ClaudeProvider::new(config).await?)),
+        "ollama" => Ok(Arc::new(OllamaProvider::new(config).await?)),
+        "openai" => Ok(Arc::new(OpenAIProvider::new(config).await?)),
+        "claude" => Ok(Arc::new(ClaudeProvider::new(config).await?)),
         _ => Err(anyhow::anyhow!(
             "Unknown LLM provider: {}",
             config.primary_provider
         )),
+    }
+}
+
+async fn create_fallback_providers(config: &LLMConfig) -> Result<Vec<Arc<dyn LLMProvider>>> {
+    let mut providers = Vec::new();
+    
+    // Add all available providers as fallbacks except the primary one
+    let provider_types = ["ollama", "openai", "claude"];
+    
+    for provider_type in provider_types {
+        if provider_type != config.primary_provider.as_str() {
+            match create_single_provider(provider_type, config).await {
+                Ok(provider) => providers.push(provider),
+                Err(e) => tracing::warn!("Failed to create fallback provider {}: {}", provider_type, e),
+            }
+        }
+    }
+    
+    Ok(providers)
+}
+
+async fn create_single_provider(provider_type: &str, config: &LLMConfig) -> Result<Arc<dyn LLMProvider>> {
+    match provider_type {
+        "ollama" => Ok(Arc::new(OllamaProvider::new(config).await?)),
+        "openai" => Ok(Arc::new(OpenAIProvider::new(config).await?)),
+        "claude" => Ok(Arc::new(ClaudeProvider::new(config).await?)),
+        _ => Err(anyhow::anyhow!("Unknown provider type: {}", provider_type)),
     }
 }
 
@@ -660,5 +739,389 @@ impl ClaudeProvider {
         }
 
         messages
+    }
+}
+
+// Enhanced LLM Components
+
+/// Intelligent model selection based on task characteristics
+#[derive(Clone, Debug)]
+pub struct ModelSelector {
+    task_patterns: HashMap<String, String>, // pattern -> preferred model
+    performance_history: HashMap<String, ModelPerformance>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ModelPerformance {
+    average_latency: f64,
+    success_rate: f64,
+    quality_score: f64,
+    cost_efficiency: f64,
+}
+
+impl ModelSelector {
+    pub fn new() -> Self {
+        let mut task_patterns = HashMap::new();
+        task_patterns.insert("code".to_string(), "claude".to_string());
+        task_patterns.insert("explain".to_string(), "claude".to_string());
+        task_patterns.insert("creative".to_string(), "openai".to_string());
+        task_patterns.insert("simple".to_string(), "ollama".to_string());
+        task_patterns.insert("fast".to_string(), "ollama".to_string());
+        
+        Self {
+            task_patterns,
+            performance_history: HashMap::new(),
+        }
+    }
+
+    pub async fn select_optimal_provider(
+        &self,
+        prompt: &str,
+        primary: &Arc<dyn LLMProvider>,
+        fallbacks: &[Arc<dyn LLMProvider>],
+    ) -> Arc<dyn LLMProvider> {
+        // Analyze prompt characteristics
+        let task_type = self.analyze_task_type(prompt);
+        
+        // Check if we have a preferred provider for this task type
+        if let Some(preferred_model) = self.task_patterns.get(&task_type) {
+            // Try to find the preferred provider
+            if primary.model_name().contains(preferred_model) {
+                return Arc::clone(primary);
+            }
+            
+            for provider in fallbacks {
+                if provider.model_name().contains(preferred_model) {
+                    return Arc::clone(provider);
+                }
+            }
+        }
+        
+        // Fallback to primary provider
+        Arc::clone(primary)
+    }
+
+    fn analyze_task_type(&self, prompt: &str) -> String {
+        let prompt_lower = prompt.to_lowercase();
+        
+        if prompt_lower.contains("code") || prompt_lower.contains("rust") || prompt_lower.contains("function") {
+            "code".to_string()
+        } else if prompt_lower.contains("explain") || prompt_lower.contains("what") || prompt_lower.contains("how") {
+            "explain".to_string()
+        } else if prompt_lower.contains("create") || prompt_lower.contains("write") || prompt_lower.contains("generate") {
+            "creative".to_string()
+        } else if prompt.len() < 50 {
+            "simple".to_string()
+        } else {
+            "complex".to_string()
+        }
+    }
+}
+
+/// Advanced prompt enhancement with context injection
+#[derive(Clone, Debug)]
+pub struct PromptEnhancer {
+    system_prompts: HashMap<String, String>,
+    context_templates: HashMap<String, String>,
+}
+
+impl PromptEnhancer {
+    pub fn new() -> Self {
+        let mut system_prompts = HashMap::new();
+        system_prompts.insert(
+            "code".to_string(),
+            "You are an expert software engineer specialized in Rust, systems programming, and DevOps. Provide precise, efficient, and well-documented solutions.".to_string()
+        );
+        system_prompts.insert(
+            "explain".to_string(),
+            "You are a helpful technical assistant. Explain concepts clearly and concisely, providing practical examples when appropriate.".to_string()
+        );
+        
+        let mut context_templates = HashMap::new();
+        context_templates.insert(
+            "default".to_string(),
+            "Current context: {context}\n\nUser request: {prompt}".to_string()
+        );
+        
+        Self {
+            system_prompts,
+            context_templates,
+        }
+    }
+
+    pub async fn enhance(&self, prompt: &str, context: Option<&str>) -> Result<String> {
+        let task_type = self.detect_task_type(prompt);
+        
+        let mut enhanced = String::new();
+        
+        // Add system prompt if available
+        if let Some(system_prompt) = self.system_prompts.get(&task_type) {
+            enhanced.push_str(system_prompt);
+            enhanced.push_str("\n\n");
+        }
+        
+        // Add context if provided
+        if let Some(ctx) = context {
+            if let Some(template) = self.context_templates.get("default") {
+                let contextualized = template
+                    .replace("{context}", ctx)
+                    .replace("{prompt}", prompt);
+                enhanced.push_str(&contextualized);
+            } else {
+                enhanced.push_str(&format!("Context: {}\n\n{}", ctx, prompt));
+            }
+        } else {
+            enhanced.push_str(prompt);
+        }
+        
+        Ok(enhanced)
+    }
+
+    fn detect_task_type(&self, prompt: &str) -> String {
+        let prompt_lower = prompt.to_lowercase();
+        
+        if prompt_lower.contains("code") || prompt_lower.contains("rust") || prompt_lower.contains("function") {
+            "code".to_string()
+        } else if prompt_lower.contains("explain") || prompt_lower.contains("what") || prompt_lower.contains("how") {
+            "explain".to_string()
+        } else {
+            "general".to_string()
+        }
+    }
+}
+
+/// Response caching for improved performance
+#[derive(Clone, Debug)]
+pub struct ResponseCache {
+    cache: HashMap<String, CachedResponse>,
+    max_size: usize,
+    ttl_seconds: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct CachedResponse {
+    content: String,
+    timestamp: DateTime<Utc>,
+    access_count: u32,
+}
+
+impl ResponseCache {
+    pub fn new() -> Self {
+        Self {
+            cache: HashMap::new(),
+            max_size: 1000,
+            ttl_seconds: 3600, // 1 hour
+        }
+    }
+
+    pub fn get(&mut self, key: &str) -> Option<String> {
+        if let Some(cached) = self.cache.get_mut(key) {
+            let now = Utc::now();
+            let age = now.signed_duration_since(cached.timestamp).num_seconds() as u64;
+            
+            if age < self.ttl_seconds {
+                cached.access_count += 1;
+                return Some(cached.content.clone());
+            } else {
+                self.cache.remove(key);
+            }
+        }
+        None
+    }
+
+    pub fn insert(&mut self, key: String, content: String) {
+        // Evict old entries if at capacity
+        if self.cache.len() >= self.max_size {
+            self.evict_oldest();
+        }
+        
+        self.cache.insert(key, CachedResponse {
+            content,
+            timestamp: Utc::now(),
+            access_count: 1,
+        });
+    }
+
+    fn evict_oldest(&mut self) {
+        if let Some(oldest_key) = self.cache
+            .iter()
+            .min_by_key(|(_, v)| v.timestamp)
+            .map(|(k, _)| k.clone())
+        {
+            self.cache.remove(&oldest_key);
+        }
+    }
+}
+
+/// Usage statistics and analytics
+#[derive(Clone, Debug)]
+pub struct UsageStats {
+    provider_stats: HashMap<String, ProviderStats>,
+    total_requests: u64,
+    total_tokens: u64,
+    total_cost: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProviderStats {
+    requests: u64,
+    failures: u64,
+    total_latency: f64,
+    tokens_used: u64,
+    estimated_cost: f64,
+}
+
+impl UsageStats {
+    pub fn new() -> Self {
+        Self {
+            provider_stats: HashMap::new(),
+            total_requests: 0,
+            total_tokens: 0,
+            total_cost: 0.0,
+        }
+    }
+
+    pub fn record_request(&mut self, provider: &str, latency: f64, tokens: u64, cost: f64, success: bool) {
+        let stats = self.provider_stats.entry(provider.to_string()).or_insert(ProviderStats {
+            requests: 0,
+            failures: 0,
+            total_latency: 0.0,
+            tokens_used: 0,
+            estimated_cost: 0.0,
+        });
+
+        stats.requests += 1;
+        stats.total_latency += latency;
+        stats.tokens_used += tokens;
+        stats.estimated_cost += cost;
+        
+        if !success {
+            stats.failures += 1;
+        }
+
+        self.total_requests += 1;
+        self.total_tokens += tokens;
+        self.total_cost += cost;
+    }
+
+    pub fn get_summary(&self) -> serde_json::Value {
+        serde_json::json!({
+            "total_requests": self.total_requests,
+            "total_tokens": self.total_tokens,
+            "total_cost": self.total_cost,
+            "providers": self.provider_stats.iter().map(|(name, stats)| {
+                serde_json::json!({
+                    "provider": name,
+                    "requests": stats.requests,
+                    "success_rate": if stats.requests > 0 { 
+                        ((stats.requests - stats.failures) as f64 / stats.requests as f64) * 100.0 
+                    } else { 0.0 },
+                    "avg_latency": if stats.requests > 0 { 
+                        stats.total_latency / stats.requests as f64 
+                    } else { 0.0 },
+                    "tokens_used": stats.tokens_used,
+                    "estimated_cost": stats.estimated_cost,
+                })
+            }).collect::<Vec<_>>()
+        })
+    }
+}
+
+impl LLMRouter {
+    // Helper methods for enhanced functionality
+    
+    fn generate_cache_key(&self, prompt: &str, context: Option<&str>) -> String {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        
+        let mut hasher = DefaultHasher::new();
+        prompt.hash(&mut hasher);
+        if let Some(ctx) = context {
+            ctx.hash(&mut hasher);
+        }
+        format!("{:x}", hasher.finish())
+    }
+
+    async fn get_cached_response(&self, key: &str) -> Option<String> {
+        self.response_cache.write().await.get(key)
+    }
+
+    async fn cache_response(&self, key: &str, response: &str) {
+        self.response_cache.write().await.insert(key.to_string(), response.to_string());
+    }
+
+    async fn process_response(&self, response: String, start_time: std::time::Instant, provider: &str) -> Result<String> {
+        let latency = start_time.elapsed().as_millis() as f64;
+        let estimated_tokens = response.split_whitespace().count() as u64;
+        let estimated_cost = self.estimate_cost(provider, estimated_tokens);
+        
+        // Record usage stats
+        self.usage_stats.write().await.record_request(
+            provider,
+            latency,
+            estimated_tokens,
+            estimated_cost,
+            true
+        );
+        
+        // Store interaction in memory if available
+        if let Some(memory) = &self.memory_store {
+            let interaction = Interaction {
+                timestamp: Utc::now(),
+                interaction_type: InteractionType::Query,
+                content: response.clone(),
+                success: true,
+                execution_time: Some(latency as u64),
+                context_tags: vec!["llm".to_string(), provider.to_string()],
+            };
+            
+            if let Ok(mut mem) = memory.try_write() {
+                let _ = mem.update_global_context(interaction).await;
+            }
+        }
+        
+        Ok(response)
+    }
+
+    fn estimate_cost(&self, provider: &str, tokens: u64) -> f64 {
+        // Rough cost estimates per 1k tokens
+        let cost_per_1k = match provider {
+            name if name.contains("gpt-4") => 0.03,
+            name if name.contains("gpt-3.5") => 0.002,
+            name if name.contains("claude") => 0.025,
+            _ => 0.0, // Ollama is typically free
+        };
+        
+        (tokens as f64 / 1000.0) * cost_per_1k
+    }
+
+    /// Get comprehensive usage statistics
+    pub async fn get_usage_stats(&self) -> serde_json::Value {
+        self.usage_stats.read().await.get_summary()
+    }
+
+    /// Clear response cache
+    pub async fn clear_cache(&self) {
+        self.response_cache.write().await.cache.clear();
+    }
+
+    /// Generate with enhanced context from memory
+    pub async fn generate_with_memory_context(&self, prompt: &str) -> Result<String> {
+        if let Some(memory) = &self.memory_store {
+            if let Ok(mut mem) = memory.try_write() {
+                // Search for relevant context
+                let context_entries = mem.search_context(prompt, 3).await?;
+                let context = context_entries.iter()
+                    .map(|entry| entry.content.clone())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                
+                if !context.is_empty() {
+                    return self.generate(prompt, Some(&context)).await;
+                }
+            }
+        }
+        
+        self.generate(prompt, None).await
     }
 }
