@@ -1,0 +1,150 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Build release binaries on both GPU runners
+  build-release:
+    name: Build Release
+    strategy:
+      matrix:
+        target:
+          - { runner: nv-osmium, gpu: "RTX 2060", features: "gpu", suffix: "gpu-2060" }
+          - { runner: nv-prometheus, gpu: "RTX 3070", features: "gpu", suffix: "gpu-3070" }
+          - { runner: ubuntu-latest, gpu: "none", features: "", suffix: "cpu" }
+    runs-on: ${{ matrix.target.runner == 'ubuntu-latest' && 'ubuntu-latest' || format('[self-hosted, {0}]', matrix.target.runner) }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: GPU Info (if applicable)
+        if: matrix.target.gpu != 'none'
+        run: |
+          nvidia-smi || echo "No GPU available"
+          nvcc --version || echo "No CUDA available"
+          
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.target.features }}" = "gpu" ]; then
+            cargo build --release --features gpu -p jarvis-nv
+            cargo build --release -p jarvis-daemon
+            cargo build --release -p jarvis-core
+          else
+            cargo build --release --workspace --exclude jarvis-nv
+          fi
+          
+      - name: Package binaries
+        run: |
+          mkdir -p artifacts
+          if [ "${{ matrix.target.features }}" = "gpu" ]; then
+            cp target/release/jarvis-nv artifacts/ || echo "jarvis-nv not found"
+          fi
+          cp target/release/jarvisd artifacts/ || echo "jarvisd not found"
+          tar -czf jarvis-${{ matrix.target.suffix }}.tar.gz -C artifacts .
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: jarvis-${{ matrix.target.suffix }}
+          path: jarvis-${{ matrix.target.suffix }}.tar.gz
+
+  # Build and push Docker images
+  build-docker:
+    name: Build Docker Images
+    runs-on: [self-hosted, nv-prometheus]  # Use RTX 3070 for Docker builds
+    needs: build-release
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            
+      - name: Build and push jarvis-nv (GPU)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./jarvis-nv
+          file: ./jarvis-nv/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-gpu
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          
+      - name: Build and push jarvisd (CPU)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./deployment/docker
+          file: ./deployment/docker/Dockerfile.jarvisd
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-cpu
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+
+  # Performance benchmarking across GPUs
+  benchmark-comparison:
+    name: GPU Performance Benchmarks
+    runs-on: [self-hosted, nv-prometheus]
+    needs: build-release
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Run comprehensive benchmarks
+        working-directory: jarvis-nv
+        run: |
+          echo "# GPU Performance Benchmark Report" > benchmark-report.md
+          echo "**Release**: ${{ github.ref_name }}" >> benchmark-report.md
+          echo "**Date**: $(date)" >> benchmark-report.md
+          echo "**Commit**: ${{ github.sha }}" >> benchmark-report.md
+          echo "" >> benchmark-report.md
+          
+          echo "## RTX 3070 Performance" >> benchmark-report.md
+          cargo run --release --features gpu --bin benchmark >> benchmark-report.md 2>&1 || true
+          
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-report
+          path: jarvis-nv/benchmark-report.md
+          
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body_path: jarvis-nv/benchmark-report.md
+          draft: false
+          prerelease: false

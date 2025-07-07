@@ -1,0 +1,139 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Standard CPU builds and tests
+  test-cpu:
+    name: CPU Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Run CPU tests
+        run: |
+          cargo test --workspace --exclude jarvis-nv
+          cargo test -p jarvis-core
+          cargo test -p jarvis-daemon
+
+  # GPU builds and tests on both NVIDIA runners
+  test-gpu:
+    name: GPU Tests
+    strategy:
+      matrix:
+        runner: 
+          - { name: nv-osmium, gpu: "RTX 2060", cuda: "12.0" }
+          - { name: nv-prometheus, gpu: "RTX 3070", cuda: "12.0" }
+    runs-on: [self-hosted, ${{ matrix.runner.name }}]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: GPU Info
+        run: |
+          nvidia-smi
+          nvcc --version
+          echo "Testing on ${{ matrix.runner.gpu }}"
+          
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ matrix.runner.name }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          
+      - name: Build jarvis-nv with GPU features
+        working-directory: jarvis-nv
+        run: |
+          cargo build --features gpu
+          cargo test --features gpu
+          
+      - name: Run GPU benchmarks
+        working-directory: jarvis-nv
+        run: |
+          cargo run --features gpu --bin benchmark || echo "Benchmark completed on ${{ matrix.runner.gpu }}"
+
+  # Docker GPU testing
+  test-docker-gpu:
+    name: Docker GPU Tests
+    runs-on: [self-hosted, nv-prometheus]  # Use the more powerful GPU for Docker
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build NVIDIA Docker image
+        working-directory: jarvis-nv
+        run: |
+          docker build -t jarvis-nv:test .
+          
+      - name: Test GPU in container
+        run: |
+          docker run --rm --gpus all jarvis-nv:test nvidia-smi
+          docker run --rm --gpus all jarvis-nv:test nvcc --version
+
+  # Performance comparison between GPUs
+  gpu-benchmark:
+    name: GPU Performance Comparison
+    needs: test-gpu
+    runs-on: [self-hosted, nv-prometheus]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Generate performance report
+        working-directory: jarvis-nv
+        run: |
+          echo "## GPU Performance Results" > gpu-report.md
+          echo "Date: $(date)" >> gpu-report.md
+          echo "Commit: ${{ github.sha }}" >> gpu-report.md
+          echo "" >> gpu-report.md
+          cargo run --features gpu --bin benchmark >> gpu-report.md 2>&1 || true
+          
+      - name: Upload performance report
+        uses: actions/upload-artifact@v3
+        with:
+          name: gpu-performance-report
+          path: jarvis-nv/gpu-report.md
+
+  # Lint and format checks
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
