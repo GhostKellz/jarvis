@@ -49,7 +49,7 @@ reqwest = { version = "0.11", features = ["json", "stream"] }
 ollama-rs = "0.1"
 
 # Memory/Storage
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
+sqlx = { version = "0.8.1", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
 
 # gRPC and HTTP/3 Support
 tonic = { version = "0.11", features = ["tls", "transport"] }

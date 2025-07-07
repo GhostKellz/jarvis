@@ -57,7 +57,7 @@ sysinfo = "0.30"
 nvml-wrapper = { version = "0.9", optional = true }
 
 # Database and storage
-sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
+sqlx = { version = "0.8.1", features = ["runtime-tokio-rustls", "sqlite", "migrate"] }
 
 # Cryptography (for Web5/ZNS integration)
 ring = "0.17"
