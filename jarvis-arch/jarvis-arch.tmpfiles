@@ -1,0 +1,29 @@
+# Jarvis Arch Linux Agent - tmpfiles configuration
+# Creates necessary runtime directories and sets permissions
+
+# Main directories
+d /var/lib/jarvis 0755 jarvis jarvis -
+d /var/log/jarvis 0755 jarvis jarvis -
+d /run/jarvis 0755 jarvis jarvis -
+d /tmp/jarvis 0755 jarvis jarvis -
+
+# Database directory
+d /var/lib/jarvis/db 0700 jarvis jarvis -
+
+# Cache directories  
+d /var/cache/jarvis 0755 jarvis jarvis -
+d /var/cache/jarvis/packages 0755 jarvis jarvis -
+d /var/cache/jarvis/metadata 0755 jarvis jarvis -
+
+# Configuration override directory
+d /etc/jarvis/conf.d 0750 root jarvis -
+
+# Socket directory
+d /run/jarvis/sockets 0755 jarvis jarvis -
+
+# PID file
+f /run/jarvis/jarvis-arch.pid 0644 jarvis jarvis -
+
+# Lock files
+f /run/jarvis/package.lock 0644 jarvis jarvis -
+f /run/jarvis/maintenance.lock 0644 jarvis jarvis -

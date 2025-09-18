@@ -1,0 +1,62 @@
+[package]
+name = "jarvis-arch"
+version = "0.1.0"
+edition = "2024"
+authors = ["Christopher Kelley <ckelley@ghostkellz.sh>"]
+description = "Arch Linux system maintenance and security agent"
+license = "MIT"
+
+[dependencies]
+# Core dependencies
+tokio = { version = "1.35", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Async and futures
+async-trait = "0.1"
+futures = "0.3"
+
+# HTTP client for API calls
+reqwest = { version = "0.11", features = ["json", "stream"] }
+
+# Process execution
+tokio-process = "0.2"
+
+# System information
+sysinfo = "0.30"
+nix = "0.27"
+
+# File system operations
+walkdir = "2.4"
+glob = "0.3"
+
+# Regular expressions
+regex = "1.0"
+
+# Date and time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Database (for caching and state)
+sqlx = { version = "0.8.1", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+
+# Configuration management
+config = "0.14"
+dirs = "5.0"
+
+# Security and cryptography
+sha2 = "0.10"
+hex = "0.4"
+
+# Package management specific
+alpm = "3.0"  # Arch Linux Package Management library
+pacmanconf = "3.0"  # Pacman configuration parser

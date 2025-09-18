@@ -95,8 +95,7 @@ services:
       - "9001:9001"    # Control API
     environment:
       - GHOSTBRIDGE_QUIC_PORT=9000
-      - GHOSTBRIDGE_API_PORT=9001
-      - GHOSTBRIDGE_GHOSTD_URL=http://ghostd:8545
+r      - GHOSTBRIDGE_GHOSTD_URL=http://ghostd:8545
       - GHOSTBRIDGE_WALLETD_URL=http://walletd:3001
     depends_on:
       - ghostd

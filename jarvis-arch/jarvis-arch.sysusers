@@ -1,0 +1,6 @@
+# Jarvis Arch Linux Agent - sysusers configuration
+# Creates the jarvis system user and group for running the service
+
+#Type Name       ID             GECOS                    Home directory Shell
+u     jarvis     -              "Jarvis System Agent"    /var/lib/jarvis /usr/bin/nologin
+g     jarvis     -              -                        -               -

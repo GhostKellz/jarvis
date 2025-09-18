@@ -1,0 +1,26 @@
+# Example PKGBUILD for Jarvis
+# This is a template - modify as needed for actual packaging
+
+pkgname=jarvis
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="AI-powered personal assistant"
+arch=('x86_64')
+url="https://github.com/yourusername/jarvis"
+license=('MIT')
+depends=()
+makedepends=('rust' 'cargo')
+source=("$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$pkgname-$pkgver"
+    cargo build --release
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 target/release/jarvis "$pkgdir/usr/bin/jarvis"
+    install -Dm644 assets/icons/arch/jarvis.png "$pkgdir/usr/share/pixmaps/jarvis.png"
+    install -Dm644 assets/icons/linux/jarvis.desktop "$pkgdir/usr/share/applications/jarvis.desktop"
+}

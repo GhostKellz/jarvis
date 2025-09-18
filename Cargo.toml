@@ -21,7 +21,8 @@ members = [
     "jarvis-agent", 
     "jarvis-shell",
     "jarvis-nvim",
-    "jarvis-nv"
+    "jarvis-nv",
+    "jarvis-ghostflow"
 ]
 
 [dependencies]

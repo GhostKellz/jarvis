@@ -1,0 +1,156 @@
+# Maintainer: Christopher Kelley <ckelley@ghostkellz.sh>
+pkgname=jarvis-arch
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Jarvis AI system maintenance agent for Arch Linux"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ghostkellz/jarvis"
+license=('MIT')
+depends=(
+    'pacman'
+    'systemd'
+    'openssl'
+    'zlib'
+    'gcc-libs'
+    'glibc'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'zig'
+    'git'
+    'pkgconf'
+    'cmake'
+)
+optdepends=(
+    'yay: AUR package support'
+    'paru: Alternative AUR helper'
+    'wazuh-agent: Security monitoring integration'
+    'prometheus: Metrics collection'
+    'grafana: Metrics visualization'
+)
+backup=(
+    'etc/jarvis/jarvis-arch.toml'
+    'etc/jarvis/zqlite.conf'
+)
+source=(
+    "jarvis-arch-$pkgver.tar.gz::https://github.com/ghostkellz/jarvis/archive/v$pkgver.tar.gz"
+    "jarvis-arch.service"
+    "jarvis-arch.toml"
+    "jarvis-arch.tmpfiles"
+    "jarvis-arch.sysusers"
+)
+sha256sums=(
+    'SKIP'  # Will be updated when source is finalized
+    'SKIP'
+    'SKIP'
+    'SKIP'
+    'SKIP'
+)
+install="jarvis-arch.install"
+
+prepare() {
+    cd "$srcdir/jarvis-$pkgver/jarvis-arch"
+    
+    # Update Cargo.lock if needed
+    cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
+build() {
+    cd "$srcdir/jarvis-$pkgver/jarvis-arch"
+    
+    # Set optimization flags
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    export CARGO_INCREMENTAL=0
+    export RUSTFLAGS="-C target-cpu=native -C opt-level=3 -C lto=fat -C codegen-units=1"
+    
+    # Build ZQLite first (Zig dependency)
+    echo "Building ZQLite dependency..."
+    zig build-lib \
+        src/zqlite/zqlite.zig \
+        -O ReleaseFast \
+        -femit-bin=target/libzqlite.a \
+        -target native-native-gnu \
+        -mcpu=native
+    
+    # Build the Rust binary
+    echo "Building Jarvis Arch agent..."
+    cargo build \
+        --release \
+        --locked \
+        --all-features \
+        --target-dir=target
+}
+
+check() {
+    cd "$srcdir/jarvis-$pkgver/jarvis-arch"
+    
+    # Run tests (skip integration tests that require root)
+    RUST_BACKTRACE=1 cargo test \
+        --release \
+        --locked \
+        --lib \
+        --target-dir=target
+}
+
+package() {
+    cd "$srcdir/jarvis-$pkgver/jarvis-arch"
+    
+    # Install main binary
+    install -Dm755 "target/release/jarvis-arch-service" \
+        "$pkgdir/usr/bin/jarvis-arch"
+    
+    # Create CLI symlink
+    ln -s jarvis-arch "$pkgdir/usr/bin/jarvis"
+    
+    # Install systemd service
+    install -Dm644 "$srcdir/jarvis-arch.service" \
+        "$pkgdir/usr/lib/systemd/system/jarvis-arch.service"
+    
+    # Install default configuration
+    install -Dm644 "$srcdir/jarvis-arch.toml" \
+        "$pkgdir/etc/jarvis/jarvis-arch.toml"
+    
+    # Install tmpfiles configuration
+    install -Dm644 "$srcdir/jarvis-arch.tmpfiles" \
+        "$pkgdir/usr/lib/tmpfiles.d/jarvis-arch.conf"
+    
+    # Install sysusers configuration
+    install -Dm644 "$srcdir/jarvis-arch.sysusers" \
+        "$pkgdir/usr/lib/sysusers.d/jarvis-arch.conf"
+    
+    # Install ZQLite library
+    install -Dm644 "target/libzqlite.a" \
+        "$pkgdir/usr/lib/jarvis/libzqlite.a"
+    
+    # Install documentation
+    install -Dm644 README.md \
+        "$pkgdir/usr/share/doc/$pkgname/README.md"
+    
+    # Install license
+    install -Dm644 "../LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    
+    # Install shell completions
+    install -d "$pkgdir/usr/share/bash-completion/completions"
+    install -d "$pkgdir/usr/share/zsh/site-functions"
+    install -d "$pkgdir/usr/share/fish/vendor_completions.d"
+    
+    # Generate completions (if the binary supports it)
+    if "$pkgdir/usr/bin/jarvis-arch" completion bash >/dev/null 2>&1; then
+        "$pkgdir/usr/bin/jarvis-arch" completion bash > \
+            "$pkgdir/usr/share/bash-completion/completions/jarvis-arch"
+        "$pkgdir/usr/bin/jarvis-arch" completion zsh > \
+            "$pkgdir/usr/share/zsh/site-functions/_jarvis-arch"
+        "$pkgdir/usr/bin/jarvis-arch" completion fish > \
+            "$pkgdir/usr/share/fish/vendor_completions.d/jarvis-arch.fish"
+    fi
+    
+    # Create necessary directories
+    install -dm755 "$pkgdir/var/lib/jarvis"
+    install -dm755 "$pkgdir/var/log/jarvis"
+    install -dm750 "$pkgdir/etc/jarvis/conf.d"
+}
+
+# vim:set ts=4 sw=4 et:

@@ -1,0 +1,156 @@
+# Jarvis Arch Linux Agent Configuration
+# This is the default configuration file for the Jarvis system maintenance agent
+
+[agent.pacman]
+# Pacman configuration
+no_confirm = false          # Don't auto-confirm operations (safety first)
+verbose = true             # Enable verbose output
+check_space = true         # Check available disk space
+download_timeout = 30      # Download timeout in seconds
+parallel_downloads = 5     # Number of parallel downloads
+
+[agent.aur]
+# AUR (Arch User Repository) settings
+enabled = true             # Enable AUR support
+helper = "yay"            # AUR helper to use (yay, paru, etc.)
+check_updates = true       # Check for AUR updates
+build_timeout = 1800      # Build timeout in seconds (30 minutes)
+pgp_verify = true         # Verify PGP signatures
+
+[agent.system]
+# System monitoring settings
+check_interval = 300       # Health check interval in seconds (5 minutes)
+disk_usage_threshold = 85  # Disk usage warning threshold (%)
+memory_threshold = 90      # Memory usage warning threshold (%)
+load_threshold = 5.0       # Load average warning threshold
+temp_threshold = 80        # Temperature warning threshold (°C)
+
+[agent.security]
+# Security scanning settings
+enabled = true             # Enable security scanning
+vulnerability_feeds = [    # Vulnerability data sources
+    "https://security.archlinux.org/json",
+    "https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-recent.json.gz"
+]
+check_interval = 3600      # Security check interval in seconds (1 hour)
+auto_patch = false         # Automatically apply security patches (disabled by default)
+severity_threshold = "medium"  # Minimum severity to report (low, medium, high, critical)
+
+[agent.maintenance]
+# Automated maintenance settings
+enabled = true             # Enable automated maintenance
+cleanup_cache = true       # Clean package cache
+cleanup_logs = true        # Clean old log files
+update_mirrorlist = true   # Update mirror list
+vacuum_database = true     # Vacuum pacman database
+
+[agent.services]
+# Service management settings
+monitor_critical = true    # Monitor critical system services
+restart_failed = false     # Auto-restart failed services (disabled by default)
+services_to_monitor = [    # Services to monitor
+    "systemd-resolved",
+    "systemd-networkd", 
+    "sshd",
+    "chronyd"
+]
+
+[agent.vulnerability]
+# Vulnerability scanning configuration
+database_url = "https://security.archlinux.org/issues.json"
+update_interval = 21600    # Update vulnerability database every 6 hours
+cache_duration = 86400     # Cache duration in seconds (24 hours)
+check_aur_packages = true  # Include AUR packages in vulnerability checks
+
+[database]
+# ZQLite database configuration
+db_path = "/var/lib/jarvis/jarvis.db"
+encryption_key = "jarvis-default-key-change-me"  # CHANGE THIS IN PRODUCTION!
+max_connections = 10
+enable_wal_mode = true     # Write-Ahead Logging for better performance
+enable_foreign_keys = true
+cache_size_kb = 10240      # 10MB cache
+page_size = 4096
+vacuum_on_startup = false
+
+[service]
+# Service daemon settings
+listen_address = "127.0.0.1"
+listen_port = 7419         # JARV on phone keypad
+enable_metrics = true      # Enable Prometheus metrics
+metrics_port = 9090
+log_level = "info"         # Log level (trace, debug, info, warn, error)
+enable_systemd_notifications = true
+health_check_interval_seconds = 300  # 5 minutes
+
+[service.maintenance_schedule]
+# Automated maintenance scheduling (cron expressions)
+auto_update = false        # Disabled by default for safety
+update_schedule = "0 2 * * 0"          # Sunday 2 AM
+auto_clean = true
+clean_schedule = "0 3 * * 0"           # Sunday 3 AM  
+security_scan_schedule = "0 1 * * *"   # Daily 1 AM
+
+# Wazuh SIEM integration (optional)
+[wazuh]
+enabled = false            # Disabled by default
+server = "127.0.0.1"
+port = 1514
+protocol = "tcp"           # tcp or udp
+encryption = true          # Enable log encryption
+certificate_path = "/etc/jarvis/wazuh.crt"
+key_path = "/etc/jarvis/wazuh.key"
+
+# Logging configuration
+[logging]
+level = "info"             # Global log level
+file = "/var/log/jarvis/jarvis-arch.log"
+max_size_mb = 100          # Maximum log file size
+max_files = 5              # Number of log files to keep
+json_format = false        # Use JSON log format
+
+# Notification settings
+[notifications]
+enabled = true
+# Email notifications (requires sendmail or similar)
+email_enabled = false
+email_to = "admin@localhost"
+email_from = "jarvis@localhost"
+
+# Webhook notifications
+webhook_enabled = false
+webhook_url = "https://hooks.slack.com/your/webhook/url"
+
+# Desktop notifications (for interactive sessions)
+desktop_enabled = false
+
+# Performance tuning
+[performance]
+# Resource limits
+max_memory_mb = 512        # Maximum memory usage
+max_cpu_percent = 50       # Maximum CPU usage
+max_disk_io_mb_s = 100     # Maximum disk I/O in MB/s
+nice_level = 10            # Process nice level (lower priority)
+
+# Caching
+enable_package_cache = true
+cache_ttl_hours = 24       # Cache time-to-live
+max_cache_size_mb = 100    # Maximum cache size
+
+# Network settings
+[network]
+timeout_seconds = 30       # Network operation timeout
+retry_attempts = 3         # Number of retry attempts
+user_agent = "Jarvis-Arch/0.1.0"
+
+# Custom hooks and scripts
+[hooks]
+# Pre/post operation hooks
+pre_update = []            # Scripts to run before updates
+post_update = []           # Scripts to run after updates
+pre_install = []           # Scripts to run before package installation  
+post_install = []          # Scripts to run after package installation
+
+# Example hook:
+# pre_update = ["/usr/local/bin/backup-config.sh"]
+# post_update = ["/usr/local/bin/notify-update.sh"]

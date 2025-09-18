@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Jarvis Arch Linux Agent - Package installation script
+# Handles post-install, upgrade, and removal tasks
+
+post_install() {
+    echo "==> Creating jarvis system user and directories..."
+    systemd-sysusers jarvis-arch.conf
+    systemd-tmpfiles --create jarvis-arch.conf
+    
+    echo "==> Setting up initial configuration..."
+    # Generate a secure encryption key for production
+    if [ -f /etc/jarvis/jarvis-arch.toml ]; then
+        # Replace default encryption key with a secure random key
+        SECURE_KEY=$(openssl rand -base64 32 | tr -d '\n')
+        sed -i "s/jarvis-default-key-change-me/$SECURE_KEY/" /etc/jarvis/jarvis-arch.toml
+    fi
+    
+    echo "==> Initializing ZQLite database..."
+    # Create database directory with proper permissions
+    install -d -m 0700 -o jarvis -g jarvis /var/lib/jarvis/db
+    
+    echo "==> Setting up logging..."
+    # Ensure log directory exists and has proper permissions
+    install -d -m 0755 -o jarvis -g jarvis /var/log/jarvis
+    
+    echo ""
+    echo "==============================================================================="
+    echo "Jarvis Arch Linux Agent has been installed successfully!"
+    echo ""
+    echo "Configuration file: /etc/jarvis/jarvis-arch.toml"
+    echo "Database location:  /var/lib/jarvis/jarvis.db"
+    echo "Log file:          /var/log/jarvis/jarvis-arch.log"
+    echo ""
+    echo "To start the service:"
+    echo "  sudo systemctl enable --now jarvis-arch.service"
+    echo ""
+    echo "To use the CLI:"
+    echo "  jarvis-arch --help"
+    echo "  jarvis --help        # (symlink)"
+    echo ""
+    echo "Security Note:"
+    echo "- A secure encryption key has been generated for your database"
+    echo "- Review and customize /etc/jarvis/jarvis-arch.toml for your needs"
+    echo "- The service runs with minimal privileges for security"
+    echo ""
+    echo "Optional dependencies for extended functionality:"
+    echo "- yay or paru: AUR package management"
+    echo "- wazuh-agent: Security monitoring integration"
+    echo "- prometheus: Metrics collection"
+    echo "==============================================================================="
+}
+
+post_upgrade() {
+    echo "==> Upgrading jarvis configuration..."
+    systemd-tmpfiles --create jarvis-arch.conf
+    
+    # Restart service if it was running
+    if systemctl is-active --quiet jarvis-arch.service; then
+        echo "==> Restarting jarvis-arch service..."
+        systemctl restart jarvis-arch.service
+    fi
+    
+    echo "==> Jarvis Arch Linux Agent upgraded successfully!"
+    echo "    Check /etc/jarvis/jarvis-arch.toml for any new configuration options"
+}
+
+pre_remove() {
+    echo "==> Stopping jarvis-arch service..."
+    systemctl stop jarvis-arch.service 2>/dev/null || true
+    systemctl disable jarvis-arch.service 2>/dev/null || true
+}
+
+post_remove() {
+    echo "==> Jarvis Arch Linux Agent has been removed"
+    echo ""
+    echo "The following directories contain data that may be preserved:"
+    echo "- /var/lib/jarvis/    (database and application data)"
+    echo "- /var/log/jarvis/    (log files)"
+    echo "- /etc/jarvis/        (configuration files)"
+    echo ""
+    echo "To completely remove all data:"
+    echo "  sudo rm -rf /var/lib/jarvis /var/log/jarvis /etc/jarvis"
+    echo ""
+    echo "To remove the system user:"
+    echo "  sudo userdel jarvis"
+}
+
+# Execute the appropriate function based on the operation
+case $1 in
+    configure)
+        post_install
+        ;;
+    upgrade)
+        post_upgrade
+        ;;
+    remove)
+        pre_remove
+        ;;
+    purge)
+        post_remove
+        ;;
+esac

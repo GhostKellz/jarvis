@@ -1,0 +1,66 @@
+[Unit]
+Description=Jarvis Arch Linux System Maintenance Agent
+Documentation=https://github.com/ghostkellz/jarvis
+After=network-online.target
+Wants=network-online.target
+Requires=systemd-resolved.service
+
+[Service]
+Type=notify
+User=jarvis
+Group=jarvis
+ExecStart=/usr/bin/jarvis-arch service
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictNamespaces=true
+
+# File system access
+ReadWritePaths=/var/lib/jarvis /var/log/jarvis /tmp
+ReadOnlyPaths=/etc/jarvis
+BindReadOnlyPaths=/var/lib/pacman/local:/var/lib/pacman/local
+BindReadOnlyPaths=/etc/pacman.conf:/etc/pacman.conf
+
+# Network settings
+IPAccounting=true
+IPAddressDeny=any
+IPAddressAllow=localhost
+IPAddressAllow=link-local
+IPAddressAllow=multicast
+
+# Capabilities needed for package management
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_FOWNER
+
+# Environment
+Environment=RUST_LOG=info
+Environment=JARVIS_CONFIG_DIR=/etc/jarvis
+Environment=JARVIS_DATA_DIR=/var/lib/jarvis
+Environment=JARVIS_LOG_DIR=/var/log/jarvis
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+MemoryMax=1G
+TasksMax=512
+
+# Systemd integration
+NotifyAccess=main
+WatchdogSec=60
+
+[Install]
+WantedBy=multi-user.target

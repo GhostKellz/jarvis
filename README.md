@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="assets/jarvis-logo.png" alt="Jarvis Logo" width="200" height="200"/>
+</div>
+
 # Jarvis
 
 > Your local AI assistant for Rust, Linux, and Homelab operations

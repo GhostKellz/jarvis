@@ -1,0 +1,10 @@
+Package: jarvis
+Version: 0.2.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6
+Maintainer: Your Name <your.email@example.com>
+Description: AI-powered personal assistant
+ Jarvis is an AI-powered personal assistant that helps with various tasks.
+ This package provides the main application and desktop integration.

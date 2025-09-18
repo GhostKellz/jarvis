@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Jarvis
+Comment=AI-powered personal assistant
+Exec=jarvis
+Icon=jarvis
+Terminal=false
+Categories=Utility;Office;
