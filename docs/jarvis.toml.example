@@ -1,0 +1,312 @@
+# Jarvis Configuration - Complete Example
+# Copy to ~/.config/jarvis/jarvis.toml and customize
+
+# ============================================================================
+# LLM Configuration - Choose your AI backend
+# ============================================================================
+
+[llm]
+# Primary provider: "ollama" (direct local) or "omen" (intelligent routing)
+primary_provider = "ollama"
+
+# --- Ollama Configuration (Local Models) ---
+# Your Ollama instance (can be Docker container or native)
+ollama_url = "http://localhost:11434"
+
+# Default model for general tasks
+default_model = "llama3.1:8b"
+
+# Context window size (tokens)
+context_window = 8192
+
+# Temperature for generation (0.0-1.0)
+# Lower = more focused, Higher = more creative
+temperature = 0.7
+
+# --- Omen Configuration (Hybrid Intelligent Routing) ---
+# Enable Omen for cost-optimized cloud/local routing
+omen_enabled = false
+omen_base_url = "http://localhost:8080/v1"
+# omen_api_key = "your-api-key-here"  # Optional
+
+# --- Cloud Provider Keys (Optional, via Omen) ---
+# openai_api_key = "sk-..."
+# claude_api_key = "sk-ant-..."
+
+# ============================================================================
+# System Configuration
+# ============================================================================
+
+[system]
+# Package manager: "pacman" (official), "yay" (AUR), or "paru" (AUR, Rust)
+arch_package_manager = "pacman"
+
+# Optional: Path to dotfiles for system config management
+# dotfiles_path = "/home/user/.dotfiles"
+
+# Optional: Homelab configuration
+# homelab_config = "/home/user/.config/homelab.toml"
+
+# GPU settings (for LLM acceleration, mining monitoring, etc.)
+gpu_enabled = false
+gpu_devices = []
+# gpu_devices = ["nvidia0", "nvidia1"]  # For multi-GPU setups
+
+# ============================================================================
+# MCP Server Configuration (Model Context Protocol)
+# ============================================================================
+
+[mcp]
+# Enable MCP server for hosting Jarvis tools
+enabled = true
+
+# Transport: "stdio" (pipe-based) or "ws" (WebSocket)
+# WebSocket recommended for persistent connections
+transport = "ws"
+
+# WebSocket address (ignored if transport = "stdio")
+address = "127.0.0.1:7332"
+
+# Tool configuration - enable/disable individual tools
+[mcp.tools]
+system_status = true       # System monitoring (CPU, RAM, disk)
+package_manager = true     # pacman/yay/paru operations
+docker = true              # Docker & KVM/libvirt management
+proxmox = false            # Proxmox integration (not yet implemented)
+git = false                # Git operations (not yet implemented)
+
+# ============================================================================
+# Database & Storage
+# ============================================================================
+
+# Memory database location (for agent memory, history, etc.)
+database_path = "~/.local/share/jarvis/memory.db"
+
+# Plugin search paths (for future extensibility)
+plugin_paths = [
+    "~/.config/jarvis/plugins",
+    "/usr/local/share/jarvis/plugins"
+]
+
+# ============================================================================
+# Blockchain Configuration (Optional)
+# ============================================================================
+
+[blockchain]
+# Default blockchain network
+default_network = "ghostchain"
+
+# Enable gas optimization
+gas_optimization = true
+
+# Enable security monitoring
+security_monitoring = true
+
+# --- GhostChain Configuration ---
+[blockchain.ghostchain]
+grpc_url = "https://[::1]:9090"
+rpc_url = "http://localhost:8545"
+chain_id = 31337
+walletd_url = "http://localhost:8080"
+ghostbridge_url = "http://localhost:8081"
+zvm_url = "http://localhost:8082"
+zns_url = "http://localhost:8083"
+use_tls = true
+ipv6_preferred = true
+connection_timeout_secs = 10
+request_timeout_secs = 30
+max_concurrent_streams = 100
+
+# --- Ethereum Configuration (Optional) ---
+# [blockchain.ethereum]
+# rpc_url = "https://mainnet.infura.io/v3/YOUR-PROJECT-ID"
+# chain_id = 1
+
+# ============================================================================
+# Network Configuration
+# ============================================================================
+
+[network]
+# IPv6 support
+ipv6_enabled = true
+ipv6_preferred = true
+
+# DNS over HTTPS
+dns_over_https = true
+
+# DNS servers (IPv6 first, IPv4 fallback)
+dns_servers = [
+    "[2606:4700:4700::1111]",  # Cloudflare IPv6
+    "[2606:4700:4700::1001]",
+    "1.1.1.1",                  # Cloudflare IPv4
+    "1.0.0.1"
+]
+
+# Network optimization level
+# Options: "Conservative", "Balanced", "Aggressive", "BlockchainOptimized"
+optimization_level = "Balanced"
+
+# ============================================================================
+# Agent Configuration (AI Agents)
+# ============================================================================
+
+[agents]
+
+# --- Transaction Monitor Agent ---
+[agents.transaction_monitor]
+enabled = true
+alert_threshold = "Medium"  # "Low", "Medium", "High", "Critical"
+auto_response = true
+batch_size = 100
+stream_buffer_size = 1000
+
+# --- Contract Auditor Agent ---
+[agents.contract_auditor]
+enabled = true
+audit_frequency = "hourly"  # "hourly", "daily", "weekly"
+ai_model = "llama3.1:8b"
+deep_analysis = true
+auto_maintenance = false
+
+# --- Gas Optimizer Agent ---
+[agents.gas_optimizer]
+enabled = true
+strategy = "MLBased"  # "Conservative", "Balanced", "Aggressive", "MLBased"
+target_confirmation_time_secs = 15
+max_gas_price_gwei = 50
+auto_optimize = true
+
+# --- Network Optimizer Agent ---
+[agents.network_optimizer]
+enabled = true
+ipv6_optimization = true
+bandwidth_monitoring = true
+latency_optimization = true
+
+# ============================================================================
+# Advanced Configuration Examples
+# ============================================================================
+
+# --- Example: Hybrid Omen Setup ---
+# [llm]
+# primary_provider = "omen"
+# ollama_url = "http://localhost:11434"
+# default_model = "llama3.1:8b"
+# omen_enabled = true
+# omen_base_url = "http://localhost:8080/v1"
+#
+# # Model selection by intent (configured in Omen)
+# [llm.intents]
+# system = "llama3.1:8b"              # Local Ollama
+# code = "deepseek-coder:6.7b"        # Local Ollama
+# devops = "qwen2.5:7b-instruct"      # Local Ollama
+# reason = "claude-3-5-sonnet"        # Cloud (via Omen)
+
+# --- Example: Multi-GPU Setup ---
+# [system]
+# gpu_enabled = true
+# gpu_devices = ["nvidia0", "nvidia1"]
+
+# --- Example: Custom Plugin Paths ---
+# plugin_paths = [
+#     "~/.config/jarvis/plugins",
+#     "/usr/local/share/jarvis/plugins",
+#     "/opt/jarvis/plugins",
+#     "~/projects/jarvis-plugins"
+# ]
+
+# --- Example: Stricter MCP Security ---
+# [mcp]
+# enabled = true
+# transport = "stdio"  # More secure than WebSocket
+#
+# [mcp.tools]
+# system_status = true
+# package_manager = false  # Disable for read-only setups
+# docker = true
+# proxmox = false
+# git = false
+
+# --- Example: Development Setup ---
+# [llm]
+# primary_provider = "ollama"
+# ollama_url = "http://localhost:11434"
+# default_model = "codellama:7b"  # Optimized for code
+# temperature = 0.3  # Lower for more deterministic code generation
+#
+# [mcp]
+# enabled = true
+# transport = "ws"
+# address = "127.0.0.1:7332"
+#
+# [mcp.tools]
+# system_status = true
+# package_manager = true
+# docker = true
+# git = true  # Enable when implemented
+
+# --- Example: Production Server Setup ---
+# [llm]
+# primary_provider = "omen"
+# omen_enabled = true
+# omen_base_url = "http://omen.internal:8080/v1"
+# omen_api_key = "${OMEN_API_KEY}"  # Read from environment
+#
+# [blockchain]
+# default_network = "ghostchain"
+# gas_optimization = true
+# security_monitoring = true
+#
+# [agents.transaction_monitor]
+# enabled = true
+# alert_threshold = "High"
+# auto_response = true
+#
+# [agents.contract_auditor]
+# enabled = true
+# audit_frequency = "hourly"
+# deep_analysis = true
+# auto_maintenance = true
+
+# ============================================================================
+# Environment Variables
+# ============================================================================
+
+# Jarvis supports environment variable substitution:
+# - JARVIS_USE_OMEN=true/false
+# - OMEN_BASE_URL=http://...
+# - OMEN_API_KEY=...
+# - OLLAMA_URL=http://...
+#
+# Example usage:
+# $ export OLLAMA_URL="http://ollama-gpu:11434"
+# $ jarvis system status
+
+# ============================================================================
+# Notes
+# ============================================================================
+
+# 1. Local-First Philosophy:
+#    - Ollama handles 90% of tasks (free, fast, private)
+#    - Omen routes complex tasks to cloud only when needed
+#    - Recommended: Start with Ollama, add Omen later
+#
+# 2. Model Selection:
+#    - llama3.1:8b - Great all-around model (8GB VRAM)
+#    - deepseek-coder:6.7b - Code generation specialist
+#    - qwen2.5:7b - DevOps and infrastructure tasks
+#    - codellama:13b - Advanced coding (requires 16GB+ VRAM)
+#
+# 3. MCP Transport:
+#    - stdio: More secure, process-to-process communication
+#    - ws: Better for persistent connections, multiple clients
+#
+# 4. Safety:
+#    - PackageManagerTool requires explicit confirmation for installs/removes
+#    - DockerTool LLM diagnostics are read-only (no auto-fixes)
+#    - Always review AI recommendations before executing
+#
+# 5. Performance:
+#    - Use GPU-accelerated Ollama for faster responses
+#    - Preload models: `ollama pull llama3.1:8b`
+#    - Monitor resource usage: `jarvis system status --verbose`

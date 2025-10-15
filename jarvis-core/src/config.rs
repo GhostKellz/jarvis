@@ -12,6 +12,47 @@ pub struct Config {
     pub agents: AgentConfig,
     pub database_path: String,
     pub plugin_paths: Vec<String>,
+    // MCP server configuration
+    #[serde(default)]
+    pub mcp: McpConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpConfig {
+    pub enabled: bool,
+    pub transport: String, // "stdio", "ws", "http"
+    pub address: Option<String>,
+    #[serde(default)]
+    pub tools: ToolsConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ToolsConfig {
+    #[serde(default = "default_true")]
+    pub system_status: bool,
+    #[serde(default = "default_true")]
+    pub package_manager: bool,
+    #[serde(default = "default_true")]
+    pub docker: bool,
+    #[serde(default = "default_true")]
+    pub proxmox: bool,
+    #[serde(default = "default_true")]
+    pub git: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            transport: "ws".to_string(),
+            address: Some("127.0.0.1:7332".to_string()),
+            tools: ToolsConfig::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -23,6 +64,33 @@ pub struct LLMConfig {
     pub default_model: Option<String>,
     pub context_window: usize,
     pub temperature: f32,
+    // Omen integration
+    pub omen_enabled: Option<bool>,
+    pub omen_base_url: Option<String>,
+    pub omen_api_key: Option<String>,
+}
+
+impl LLMConfig {
+    /// Get Omen base URL with fallback
+    pub fn omen_url(&self) -> String {
+        self.omen_base_url
+            .clone()
+            .or_else(|| std::env::var("OMEN_BASE_URL").ok())
+            .unwrap_or_else(|| "http://localhost:8080/v1".to_string())
+    }
+
+    /// Get Omen API key with fallback
+    pub fn omen_key(&self) -> Option<String> {
+        self.omen_api_key
+            .clone()
+            .or_else(|| std::env::var("OMEN_API_KEY").ok())
+    }
+
+    /// Check if Omen is enabled
+    pub fn use_omen(&self) -> bool {
+        self.omen_enabled.unwrap_or(false) ||
+        std::env::var("JARVIS_USE_OMEN").ok().map(|v| v == "true" || v == "1").unwrap_or(false)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,6 +239,9 @@ impl Default for Config {
                 default_model: Some("llama3.1:8b".to_string()),
                 context_window: 8192,
                 temperature: 0.7,
+                omen_enabled: Some(false),
+                omen_base_url: Some("http://localhost:8080/v1".to_string()),
+                omen_api_key: None,
             },
             system: SystemConfig {
                 arch_package_manager: "pacman".to_string(),
@@ -245,6 +316,7 @@ impl Default for Config {
                 "~/.config/jarvis/plugins".to_string(),
                 "/usr/local/share/jarvis/plugins".to_string(),
             ],
+            mcp: McpConfig::default(),
         }
     }
 }

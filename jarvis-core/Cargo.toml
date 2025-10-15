@@ -16,6 +16,13 @@ serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
 dirs = "5.0"
 
+# Ghost Stack Integration
+glyph = { git = "https://github.com/ghostkellz/glyph" }
+omen = { git = "https://github.com/ghostkellz/omen" }
+
+# System Information
+sysinfo = "0.30"
+
 # LLM Integration
 reqwest = { version = "0.11", features = ["json", "stream"] }
 ollama-rs = "0.1"
